@@ -4,9 +4,10 @@ import { Save } from "lucide-react";
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import type { Purchase, PurchaseFormValues } from "@/types/purchase";
-import { suppliers } from "@/data/suppliers";
-import { warehouses } from "@/data/warehouses";
-import { products } from "@/data/products";
+import { supplierService } from "@/services/supplier.service";
+import { warehouseService } from "@/services/warehouse.service";
+import { productService } from "@/services/product.service";
+import { purchaseService } from "@/services/purchase.service";
 
 const emptyValues: PurchaseFormValues = { purchaseNumber: "", purchaseDate: "", supplierId: "", warehouseId: "", productId: "", batchNumber: "", riceVariety: "", quantity: "", bagWeight: "", totalWeight: "", purchaseRate: "", subtotal: "", discount: "", transportCharges: "", otherCharges: "", grandTotal: "", paidAmount: "", paymentMethod: "cash", status: "pending", notes: "" };
 
@@ -33,6 +34,11 @@ export default function PurchaseForm({ purchase }: { purchase?: Purchase }) {
   const [values, setValues] = useState(() => toFormValues(purchase));
   const [errors, setErrors] = useState<Partial<Record<keyof PurchaseFormValues, string>>>({});
   const [saved, setSaved] = useState(false);
+  const [suppliers, setSuppliers] = useState<import("@/types/supplier").Supplier[]>([]);
+  const [warehouses, setWarehouses] = useState<import("@/types/warehouse").Warehouse[]>([]);
+  const [products, setProducts] = useState<import("@/types/product").Product[]>([]);
+
+  useEffect(() => { setSuppliers(supplierService.getAll()); setWarehouses(warehouseService.getAll()); setProducts(productService.getAll()); }, []);
 
   useEffect(() => {
     if (!purchase) {
@@ -54,11 +60,12 @@ export default function PurchaseForm({ purchase }: { purchase?: Purchase }) {
   }, [values.quantity, values.bagWeight, values.purchaseRate, values.discount, values.transportCharges, values.otherCharges]);
 
   useEffect(() => {
+    if (purchase) return;
     const selectedProduct = products.find((p) => p.id === values.productId);
     if (selectedProduct) {
       setValues((current) => ({ ...current, bagWeight: selectedProduct.bagWeight.replace(/[^\d.]/g, ""), purchaseRate: String(selectedProduct.purchasePrice), riceVariety: selectedProduct.variety }));
     }
-  }, [values.productId]);
+  }, [values.productId, purchase]);
 
   function update(key: keyof PurchaseFormValues, value: string) {
     setValues((current) => ({ ...current, [key]: value }));
@@ -76,6 +83,7 @@ export default function PurchaseForm({ purchase }: { purchase?: Purchase }) {
     if (!values.quantity || Number(values.quantity) <= 0) nextErrors.quantity = "Quantity must be greater than 0.";
     if (!values.purchaseRate || Number(values.purchaseRate) <= 0) nextErrors.purchaseRate = "Purchase rate is required.";
     if (Object.keys(nextErrors).length) { setErrors(nextErrors); return; }
+    if (purchase) { purchaseService.update(purchase.id, values); } else { purchaseService.create(values); }
     setSaved(true);
     window.setTimeout(() => router.push(purchase ? `/purchases/view/${purchase.id}` : "/purchases"), 650);
   }
@@ -135,7 +143,7 @@ export default function PurchaseForm({ purchase }: { purchase?: Purchase }) {
 
     <div className="flex justify-end gap-3">
       <button type="button" onClick={() => router.back()} className="rounded-xl border border-slate-200 px-5 py-2.5 text-sm font-semibold hover:bg-slate-50 dark:border-slate-700 dark:hover:bg-slate-800">Cancel</button>
-      <button type="submit" className="inline-flex items-center gap-2 rounded-xl bg-emerald-600 px-5 py-2.5 text-sm font-semibold text-white shadow-lg shadow-emerald-600/20 hover:bg-emerald-700"><Save size={16} />{purchase ? "Update purchase" : "Save purchase"}</button>
+      <button type="submit" disabled={saved} className="inline-flex items-center gap-2 rounded-xl bg-emerald-600 px-5 py-2.5 text-sm font-semibold text-white shadow-lg shadow-emerald-600/20 hover:bg-emerald-700 disabled:opacity-70"><Save size={16} />{saved ? "Saving..." : purchase ? "Update purchase" : "Save purchase"}</button>
     </div>
   </form>;
 }

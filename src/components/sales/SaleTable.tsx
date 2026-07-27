@@ -2,10 +2,11 @@
 
 import { ChevronsUpDown, Eye, Pencil, Printer, Search, Trash2, Truck } from "lucide-react";
 import Link from "next/link";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { formatCurrency, formatDate } from "@/lib/utils";
 import type { Sale, SaleStatus, SalePaymentStatus } from "@/types/sale";
 import DeleteSaleDialog from "./DeleteSaleDialog";
+import { saleService } from "@/services/sale.service";
 import SaleCard from "./SaleCard";
 import { SaleStatusBadge, SalePaymentBadge } from "./SaleStatusBadge";
 
@@ -17,7 +18,8 @@ export function SaleTableSkeleton() {
 }
 
 export default function SaleTable({ initialSales }: { initialSales: Sale[] }) {
-  const [sales, setSales] = useState(initialSales);
+  const [sales, setSales] = useState<Sale[]>(initialSales);
+  useEffect(() => { setSales(saleService.getAll()); }, []);
   const [query, setQuery] = useState("");
   const [status, setStatus] = useState<"all" | SaleStatus>("all");
   const [paymentStatus, setPaymentStatus] = useState<"all" | SalePaymentStatus>("all");
@@ -43,7 +45,7 @@ export default function SaleTable({ initialSales }: { initialSales: Sale[] }) {
 
   function changeSort(key: SortKey) { if (sort === key) setAscending(!ascending); else { setSort(key); setAscending(true); } }
   function resetFilters() { setQuery(""); setStatus("all"); setPaymentStatus("all"); setPage(1); }
-  function handleDelete() { if (!deleting) return; setSales((current) => current.filter((s) => s.id !== deleting.id)); setDeleting(null); }
+  function handleDelete() { if (!deleting) return; saleService.delete(deleting.id); setSales((current) => current.filter((s) => s.id !== deleting.id)); setDeleting(null); }
 
   const sortIcon = (key: SortKey) => <ChevronsUpDown size={14} className={`ml-1 inline ${sort === key ? "text-emerald-600" : ""}`} />;
 

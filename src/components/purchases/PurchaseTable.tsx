@@ -2,10 +2,11 @@
 
 import { ChevronsUpDown, Eye, FileText, Pencil, Printer, Search, Trash2, Truck } from "lucide-react";
 import Link from "next/link";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { formatCurrency, formatDate } from "@/lib/utils";
 import type { Purchase, PurchaseStatus, PurchasePaymentStatus } from "@/types/purchase";
 import DeletePurchaseDialog from "./DeletePurchaseDialog";
+import { purchaseService } from "@/services/purchase.service";
 import PurchaseCard from "./PurchaseCard";
 import { PurchaseStatusBadge, PurchasePaymentBadge } from "./PurchaseStatusBadge";
 
@@ -17,7 +18,8 @@ export function PurchaseTableSkeleton() {
 }
 
 export default function PurchaseTable({ initialPurchases }: { initialPurchases: Purchase[] }) {
-  const [purchases, setPurchases] = useState(initialPurchases);
+  const [purchases, setPurchases] = useState<Purchase[]>(initialPurchases);
+  useEffect(() => { setPurchases(purchaseService.getAll()); }, []);
   const [query, setQuery] = useState("");
   const [status, setStatus] = useState<"all" | PurchaseStatus>("all");
   const [paymentStatus, setPaymentStatus] = useState<"all" | PurchasePaymentStatus>("all");
@@ -43,7 +45,7 @@ export default function PurchaseTable({ initialPurchases }: { initialPurchases: 
 
   function changeSort(key: SortKey) { if (sort === key) setAscending(!ascending); else { setSort(key); setAscending(true); } }
   function resetFilters() { setQuery(""); setStatus("all"); setPaymentStatus("all"); setPage(1); }
-  function handleDelete() { if (!deleting) return; setPurchases((current) => current.filter((p) => p.id !== deleting.id)); setDeleting(null); }
+  function handleDelete() { if (!deleting) return; purchaseService.delete(deleting.id); setPurchases((current) => current.filter((p) => p.id !== deleting.id)); setDeleting(null); }
 
   const sortIcon = (key: SortKey) => <ChevronsUpDown size={14} className={`ml-1 inline ${sort === key ? "text-emerald-600" : ""}`} />;
 

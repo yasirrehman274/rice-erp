@@ -4,24 +4,24 @@ import { ChevronLeft, DollarSign } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState, useEffect } from "react";
-import { getPurchaseById, getPurchasePayments } from "@/data/purchases";
+import { purchaseService } from "@/services/purchase.service";
 import { formatCurrency, formatDate } from "@/lib/utils";
 import PurchasePaymentDialog from "@/components/purchases/PurchasePaymentDialog";
-import type { PurchasePayment } from "@/types/purchase";
+import type { Purchase, PurchasePayment } from "@/types/purchase";
 
 export default function PurchasePaymentsPage({ params }: { params: Promise<{ id: string }> }) {
   const router = useRouter();
   const [purchaseId, setPurchaseId] = useState("");
-  const [purchase, setPurchase] = useState<ReturnType<typeof getPurchaseById>>(undefined);
+  const [purchase, setPurchase] = useState<Purchase | undefined>();
   const [payments, setPayments] = useState<PurchasePayment[]>([]);
   const [dialogOpen, setDialogOpen] = useState(false);
 
   useEffect(() => {
     params.then(({ id }) => {
       setPurchaseId(id);
-      const p = getPurchaseById(id);
+      const p = purchaseService.getById(id);
       setPurchase(p);
-      if (p) setPayments(getPurchasePayments(p));
+      if (p) setPayments(purchaseService.getPurchasePayments(p));
     });
   }, [params]);
 

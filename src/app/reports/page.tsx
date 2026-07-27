@@ -1,21 +1,36 @@
 "use client";
 
-import { ArrowDownRight, ArrowUpRight, Download, FileText, Package, ShoppingCart, TrendingUp, Truck, Users, Warehouse } from "lucide-react";
+import { ArrowUpRight, Download, FileText, Package, ShoppingCart, TrendingUp, Truck, Users } from "lucide-react";
 import Link from "next/link";
-import { purchases } from "@/data/purchases";
-import { sales } from "@/data/sales";
-import { products } from "@/data/products";
-import { suppliers } from "@/data/suppliers";
-import { customers } from "@/data/customers";
-import { warehouses } from "@/data/warehouses";
-import { inventoryItems } from "@/data/inventory";
+import { purchaseService } from "@/services/purchase.service";
+import { saleService } from "@/services/sale.service";
+import { inventoryService } from "@/services/inventory.service";
+import { supplierService } from "@/services/supplier.service";
+import { customerService } from "@/services/customer.service";
+import { warehouseService } from "@/services/warehouse.service";
+import { useState, useEffect } from "react";
+import type { Purchase } from "@/types/purchase";
+import type { Sale } from "@/types/sale";
 
 export default function ReportsPage() {
+  const [purchases, setPurchases] = useState<Purchase[]>([]);
+  const [sales, setSales] = useState<Sale[]>([]);
+  const [activeWarehouses, setActiveWarehouses] = useState<{ id: string; name: string; code: string; occupiedCapacity: number; capacity: number; productCount: number; totalStock: number }[]>([]);
+
+  useEffect(() => {
+    setPurchases(purchaseService.getAll());
+    setSales(saleService.getAll());
+    setActiveWarehouses(warehouseService.filter((w) => w.status === "active"));
+  }, []);
+
   const totalPurchases = purchases.reduce((sum, p) => sum + p.grandTotal, 0);
   const totalSales = sales.reduce((sum, s) => sum + s.grandTotal, 0);
   const profit = totalSales - totalPurchases;
+  const inventoryItems = inventoryService.getAll();
   const totalInventory = inventoryItems.reduce((sum, item) => sum + item.currentStock, 0);
   const lowStockItems = inventoryItems.filter((item) => item.currentStock <= item.minimumStock).length;
+  const suppliers = supplierService.getAll();
+  const customers = customerService.getAll();
 
   const reports = [
     { title: "Purchase summary", description: "Total purchase orders, amounts, and trends.", value: `Rs. ${new Intl.NumberFormat("en-PK").format(totalPurchases)}`, change: "+12.4%", positive: true, icon: ShoppingCart, href: "/purchases" },
@@ -107,7 +122,7 @@ export default function ReportsPage() {
     <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900 sm:p-6">
       <h2 className="font-semibold">Warehouse overview</h2>
       <div className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-        {warehouses.filter((w) => w.status === "active").map((warehouse) => <article key={warehouse.id} className="rounded-xl border border-slate-200 p-4 dark:border-slate-700">
+        {activeWarehouses.map((warehouse) => <article key={warehouse.id} className="rounded-xl border border-slate-200 p-4 dark:border-slate-700">
           <div className="flex items-center justify-between"><p className="font-semibold">{warehouse.name}</p><span className="text-xs text-slate-500">{warehouse.code}</span></div>
           <div className="mt-3"><div className="flex justify-between text-xs text-slate-500"><span>Capacity</span><span>{warehouse.occupiedCapacity} / {warehouse.capacity}</span></div>
             <div className="mt-1.5 h-2 overflow-hidden rounded-full bg-slate-100 dark:bg-slate-800"><div className="h-full rounded-full bg-emerald-500 transition-all" style={{ width: `${Math.min((warehouse.occupiedCapacity / warehouse.capacity) * 100, 100)}%` }} /></div>

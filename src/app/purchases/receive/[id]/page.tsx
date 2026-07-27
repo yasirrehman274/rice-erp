@@ -2,23 +2,24 @@
 
 import { ChevronLeft, CheckCircle } from "lucide-react";
 import Link from "next/link";
-import { notFound, useRouter } from "next/navigation";
+import { useRouter } from "next/navigation";
 import { useState, useEffect } from "react";
-import { getPurchaseById } from "@/data/purchases";
+import { purchaseService } from "@/services/purchase.service";
 import { formatCurrency, formatDate } from "@/lib/utils";
 import PurchaseReceivingDialog from "@/components/purchases/PurchaseReceivingDialog";
+import type { Purchase } from "@/types/purchase";
 
 export default function ReceivePurchasePage({ params }: { params: Promise<{ id: string }> }) {
   const router = useRouter();
   const [purchaseId, setPurchaseId] = useState<string>("");
-  const [purchase, setPurchase] = useState<ReturnType<typeof getPurchaseById>>(undefined);
+  const [purchase, setPurchase] = useState<Purchase | undefined>();
   const [dialogOpen, setDialogOpen] = useState(true);
   const [received, setReceived] = useState(false);
 
   useEffect(() => {
     params.then(({ id }) => {
       setPurchaseId(id);
-      setPurchase(getPurchaseById(id));
+      setPurchase(purchaseService.getById(id));
     });
   }, [params]);
 

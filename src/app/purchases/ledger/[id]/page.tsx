@@ -1,10 +1,14 @@
+"use client";
+
 import { ChevronLeft } from "lucide-react";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import PurchaseLedger from "@/components/purchases/PurchaseLedger";
-import { getPurchaseById } from "@/data/purchases";
+import { purchaseService } from "@/services/purchase.service";
+import { useState, useEffect } from "react";
+import type { Purchase } from "@/types/purchase";
 
-function getLedgerEntries(purchase: ReturnType<typeof getPurchaseById> extends infer T ? NonNullable<T> : never) {
+function getLedgerEntries(purchase: Purchase) {
   const opening = 0;
   let balance = opening;
   return [
@@ -16,12 +20,20 @@ function getLedgerEntries(purchase: ReturnType<typeof getPurchaseById> extends i
   ];
 }
 
-export default async function PurchaseLedgerPage({ params }: { params: Promise<{ id: string }> }) {
-  const { id } = await params;
-  const purchase = getPurchaseById(id);
+export default function PurchaseLedgerPage({ params }: { params: Promise<{ id: string }> }) {
+  const [purchase, setPurchase] = useState<Purchase | undefined>();
+
+  useEffect(() => {
+    params.then(({ id }) => {
+      setPurchase(purchaseService.getById(id));
+    });
+  }, [params]);
+
+  if (purchase === undefined) return <div className="grid min-h-60 place-items-center"><div className="h-8 w-8 animate-spin rounded-full border-4 border-emerald-600 border-t-transparent" /></div>;
   if (!purchase) notFound();
+
   return <div>
-    <Link href={`/purchases/view/${id}`} className="mb-4 inline-flex items-center gap-1 text-sm font-semibold text-slate-500 hover:text-emerald-600"><ChevronLeft size={17} />Back to purchase details</Link>
+    <Link href={`/purchases/view/${purchase.id}`} className="mb-4 inline-flex items-center gap-1 text-sm font-semibold text-slate-500 hover:text-emerald-600"><ChevronLeft size={17} />Back to purchase details</Link>
     <div className="mb-6"><h1 className="text-2xl font-bold tracking-tight sm:text-3xl">Purchase ledger</h1><p className="mt-1 text-sm text-slate-500">Financial breakdown for {purchase.purchaseNumber}.</p></div>
     <PurchaseLedger purchase={purchase} entries={getLedgerEntries(purchase)} />
   </div>;

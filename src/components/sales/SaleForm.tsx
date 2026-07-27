@@ -4,9 +4,10 @@ import { Save } from "lucide-react";
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import type { Sale, SaleFormValues } from "@/types/sale";
-import { customers } from "@/data/customers";
-import { warehouses } from "@/data/warehouses";
-import { products } from "@/data/products";
+import { customerService } from "@/services/customer.service";
+import { warehouseService } from "@/services/warehouse.service";
+import { productService } from "@/services/product.service";
+import { saleService } from "@/services/sale.service";
 
 const emptyValues: SaleFormValues = { saleNumber: "", saleDate: "", customerId: "", warehouseId: "", productId: "", batchNumber: "", riceVariety: "", quantity: "", bagWeight: "", totalWeight: "", saleRate: "", subtotal: "", discount: "", transportCharges: "", otherCharges: "", grandTotal: "", receivedAmount: "", paymentMethod: "cash", status: "pending", notes: "" };
 
@@ -26,6 +27,11 @@ export default function SaleForm({ sale }: { sale?: Sale }) {
   const [values, setValues] = useState(() => toFormValues(sale));
   const [errors, setErrors] = useState<Partial<Record<keyof SaleFormValues, string>>>({});
   const [saved, setSaved] = useState(false);
+  const [customers, setCustomers] = useState<import("@/types/customer").Customer[]>([]);
+  const [warehouses, setWarehouses] = useState<import("@/types/warehouse").Warehouse[]>([]);
+  const [products, setProducts] = useState<import("@/types/product").Product[]>([]);
+
+  useEffect(() => { setCustomers(customerService.getAll()); setWarehouses(warehouseService.getAll()); setProducts(productService.getAll()); }, []);
 
   useEffect(() => {
     if (!sale) {
@@ -47,11 +53,12 @@ export default function SaleForm({ sale }: { sale?: Sale }) {
   }, [values.quantity, values.bagWeight, values.saleRate, values.discount, values.transportCharges, values.otherCharges]);
 
   useEffect(() => {
+    if (sale) return;
     const selectedProduct = products.find((p) => p.id === values.productId);
     if (selectedProduct) {
       setValues((current) => ({ ...current, bagWeight: selectedProduct.bagWeight.replace(/[^\d.]/g, ""), saleRate: String(selectedProduct.salePrice), riceVariety: selectedProduct.variety }));
     }
-  }, [values.productId]);
+  }, [values.productId, sale]);
 
   function update(key: keyof SaleFormValues, value: string) {
     setValues((current) => ({ ...current, [key]: value }));
@@ -69,6 +76,7 @@ export default function SaleForm({ sale }: { sale?: Sale }) {
     if (!values.quantity || Number(values.quantity) <= 0) nextErrors.quantity = "Quantity must be greater than 0.";
     if (!values.saleRate || Number(values.saleRate) <= 0) nextErrors.saleRate = "Sale rate is required.";
     if (Object.keys(nextErrors).length) { setErrors(nextErrors); return; }
+    if (sale) { saleService.update(sale.id, values); } else { saleService.create(values); }
     setSaved(true);
     window.setTimeout(() => router.push(sale ? `/sales/view/${sale.id}` : "/sales"), 650);
   }
@@ -128,7 +136,7 @@ export default function SaleForm({ sale }: { sale?: Sale }) {
 
     <div className="flex justify-end gap-3">
       <button type="button" onClick={() => router.back()} className="rounded-xl border border-slate-200 px-5 py-2.5 text-sm font-semibold hover:bg-slate-50 dark:border-slate-700 dark:hover:bg-slate-800">Cancel</button>
-      <button type="submit" className="inline-flex items-center gap-2 rounded-xl bg-emerald-600 px-5 py-2.5 text-sm font-semibold text-white shadow-lg shadow-emerald-600/20 hover:bg-emerald-700"><Save size={16} />{sale ? "Update sale" : "Save sale"}</button>
+      <button type="submit" disabled={saved} className="inline-flex items-center gap-2 rounded-xl bg-emerald-600 px-5 py-2.5 text-sm font-semibold text-white shadow-lg shadow-emerald-600/20 hover:bg-emerald-700 disabled:opacity-70"><Save size={16} />{saved ? "Saving..." : sale ? "Update sale" : "Save sale"}</button>
     </div>
   </form>;
 }

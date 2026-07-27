@@ -1,8 +1,14 @@
+"use client";
+
 import PurchasePageActions from "@/components/purchases/PurchasePageActions";
 import PurchaseTable from "@/components/purchases/PurchaseTable";
-import { purchases } from "@/data/purchases";
+import { purchaseService } from "@/services/purchase.service";
+import { useState, useEffect } from "react";
+import type { Purchase } from "@/types/purchase";
 
 export default function PurchasesPage() {
+  const [purchases, setPurchases] = useState<Purchase[]>([]);
+  useEffect(() => { setPurchases(purchaseService.getAll()); }, []);
   const totalAmount = purchases.reduce((sum, p) => sum + p.grandTotal, 0);
   const totalPaid = purchases.reduce((sum, p) => sum + p.paidAmount, 0);
   const totalRemaining = purchases.reduce((sum, p) => sum + p.remainingBalance, 0);

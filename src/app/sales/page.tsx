@@ -1,8 +1,14 @@
+"use client";
+
 import SalePageActions from "@/components/sales/SalePageActions";
 import SaleTable from "@/components/sales/SaleTable";
-import { sales } from "@/data/sales";
+import { saleService } from "@/services/sale.service";
+import { useState, useEffect } from "react";
+import type { Sale } from "@/types/sale";
 
 export default function SalesPage() {
+  const [sales, setSales] = useState<Sale[]>([]);
+  useEffect(() => { setSales(saleService.getAll()); }, []);
   const totalAmount = sales.reduce((sum, s) => sum + s.grandTotal, 0);
   const totalReceived = sales.reduce((sum, s) => sum + s.receivedAmount, 0);
   const totalRemaining = sales.reduce((sum, s) => sum + s.remainingBalance, 0);

@@ -1,6 +1,6 @@
 "use client";
 
-import { Building2, Bell, Globe, Palette, Save, Shield, User } from "lucide-react";
+import { Building2, Bell, Globe, Save, Shield } from "lucide-react";
 import { useState } from "react";
 
 export default function SettingsPage() {

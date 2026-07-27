@@ -19,7 +19,7 @@ const menu = [
   { title: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
   { title: "Inventory", href: "/inventory", icon: Package },
   { title: "Purchases", href: "/purchases", icon: ShoppingCart },
-  { title: "products", href: "/products", icon: Package },
+  { title: "Products", href: "/products", icon: Package },
   { title: "Sales", href: "/sales", icon: BadgeDollarSign },
   { title: "Customers", href: "/customers", icon: Users },
   { title: "Suppliers", href: "/suppliers", icon: Truck },
@@ -65,7 +65,7 @@ export default function Sidebar({
             <X size={19} />
           </button>
         </div>
-        <nav className="flex-1 space-y-1 overflow-y-auto px-4 py-6">
+        <nav className="sidebar-nav flex-1 space-y-1 overflow-y-auto px-4 py-6">
           <p className="mb-3 px-3 text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">
             Main menu
           </p>

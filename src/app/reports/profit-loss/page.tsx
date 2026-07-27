@@ -1,9 +1,18 @@
+"use client";
+
 import { ArrowLeft } from "lucide-react";
 import Link from "next/link";
-import { purchases } from "@/data/purchases";
-import { sales } from "@/data/sales";
+import { purchaseService } from "@/services/purchase.service";
+import { saleService } from "@/services/sale.service";
+import { useState, useEffect } from "react";
+import type { Purchase } from "@/types/purchase";
+import type { Sale } from "@/types/sale";
 
 export default function ProfitLossPage() {
+  const [purchases, setPurchases] = useState<Purchase[]>([]);
+  const [sales, setSales] = useState<Sale[]>([]);
+  useEffect(() => { setPurchases(purchaseService.getAll()); setSales(saleService.getAll()); }, []);
+
   const totalSales = sales.reduce((sum, s) => sum + s.grandTotal, 0);
   const totalPurchases = purchases.reduce((sum, p) => sum + p.grandTotal, 0);
   const totalSalesDiscount = sales.reduce((sum, s) => sum + s.discount, 0);

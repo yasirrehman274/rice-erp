@@ -1,3 +1,71 @@
-import InventoryPageActions from "@/components/inventory/InventoryPageActions"; import InventoryTable from "@/components/inventory/InventoryTable"; import { inventoryItems } from "@/data/inventory";
-export default function InventoryPage() { const total = inventoryItems.reduce((sum, item) => sum + item.currentStock, 0); const reserved = inventoryItems.reduce((sum, item) => sum + item.reservedStock, 0); const low = inventoryItems.filter((item) => item.currentStock <= item.minimumStock).length; return <div className="space-y-6"><div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between"><div><p className="text-sm font-medium text-emerald-600">Stock control</p><h1 className="mt-1 text-2xl font-bold tracking-tight sm:text-3xl">Inventory</h1><p className="mt-1 text-sm text-slate-500">Monitor stock across warehouses and record stock movements.</p></div><InventoryPageActions items={inventoryItems} /></div><div className="grid gap-4 sm:grid-cols-3"><Stat label="Total physical stock" value={`${total.toLocaleString()} bags`} /><Stat label="Reserved stock" value={`${reserved.toLocaleString()} bags`} /><Stat label="Low stock alerts" value={String(low)} alert={low > 0} /></div><InventoryTable initialItems={inventoryItems} /></div>; }
-function Stat({ label, value, alert = false }: { label: string; value: string; alert?: boolean }) { return <article className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-800 dark:bg-slate-900"><p className="text-sm text-slate-500">{label}</p><p className={`mt-1 text-xl font-bold ${alert ? "text-rose-600" : ""}`}>{value}</p></article>; }
+"use client";
+
+import InventoryPageActions from "@/components/inventory/InventoryPageActions";
+import InventoryTable from "@/components/inventory/InventoryTable";
+import { inventoryService } from "@/services/inventory.service";
+import { useState, useEffect } from "react";
+import type { InventoryItem } from "@/types/inventory";
+
+export default function InventoryPage() {
+  const [inventoryItems, setInventoryItems] = useState<InventoryItem[]>([]);
+  useEffect(() => {
+    setInventoryItems(inventoryService.getAll());
+  }, []);
+  const total = inventoryItems.reduce(
+    (sum, item) => sum + item.currentStock,
+    0,
+  );
+  const reserved = inventoryItems.reduce(
+    (sum, item) => sum + item.reservedStock,
+    0,
+  );
+  const low = inventoryItems.filter(
+    (item) => item.currentStock <= item.minimumStock,
+  ).length;
+  return (
+    <div className="space-y-6">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+        <div>
+          <p className="text-sm font-medium text-emerald-600">Stock control</p>
+          <h1 className="mt-1 text-2xl font-bold tracking-tight sm:text-3xl">
+            Inventory
+          </h1>
+          <p className="mt-1 text-sm text-slate-500">
+            Monitor stock across warehouses and record stock movements.
+          </p>
+        </div>
+        <InventoryPageActions items={inventoryItems} />
+      </div>
+      <div className="grid gap-4 sm:grid-cols-3">
+        <Stat
+          label="Total physical stock"
+          value={`${total.toLocaleString()} bags`}
+        />
+        <Stat
+          label="Reserved stock"
+          value={`${reserved.toLocaleString()} bags`}
+        />
+        <Stat label="Low stock alerts" value={String(low)} alert={low > 0} />
+      </div>
+      <InventoryTable initialItems={inventoryItems} />
+    </div>
+  );
+}
+function Stat({
+  label,
+  value,
+  alert = false,
+}: {
+  label: string;
+  value: string;
+  alert?: boolean;
+}) {
+  return (
+    <article className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-800 dark:bg-slate-900">
+      <p className="text-sm text-slate-500">{label}</p>
+      <p className={`mt-1 text-xl font-bold ${alert ? "text-rose-600" : ""}`}>
+        {value}
+      </p>
+    </article>
+  );
+}

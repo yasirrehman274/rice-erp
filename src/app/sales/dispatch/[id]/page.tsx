@@ -4,21 +4,22 @@ import { ChevronLeft, CheckCircle } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState, useEffect } from "react";
-import { getSaleById } from "@/data/sales";
+import { saleService } from "@/services/sale.service";
 import { formatCurrency, formatDate } from "@/lib/utils";
 import SaleDispatchDialog from "@/components/sales/SaleDispatchDialog";
+import type { Sale } from "@/types/sale";
 
 export default function DispatchSalePage({ params }: { params: Promise<{ id: string }> }) {
   const router = useRouter();
   const [saleId, setSaleId] = useState("");
-  const [sale, setSale] = useState<ReturnType<typeof getSaleById>>(undefined);
+  const [sale, setSale] = useState<Sale | undefined>();
   const [dialogOpen, setDialogOpen] = useState(true);
   const [dispatched, setDispatched] = useState(false);
 
   useEffect(() => {
     params.then(({ id }) => {
       setSaleId(id);
-      setSale(getSaleById(id));
+      setSale(saleService.getById(id));
     });
   }, [params]);
 
