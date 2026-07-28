@@ -56,7 +56,7 @@ export default function SaleForm({ sale }: { sale?: Sale }) {
     if (sale) return;
     const selectedProduct = products.find((p) => p.id === values.productId);
     if (selectedProduct) {
-      setValues((current) => ({ ...current, bagWeight: selectedProduct.bagWeight.replace(/[^\d.]/g, ""), saleRate: String(selectedProduct.salePrice), riceVariety: selectedProduct.variety }));
+      setValues((current) => ({ ...current, bagWeight: selectedProduct.bagWeight.replace(/[^\d.]/g, ""), saleRate: String(selectedProduct.suggestedSalePrice), riceVariety: selectedProduct.variety }));
     }
   }, [values.productId, sale]);
 
@@ -76,9 +76,13 @@ export default function SaleForm({ sale }: { sale?: Sale }) {
     if (!values.quantity || Number(values.quantity) <= 0) nextErrors.quantity = "Quantity must be greater than 0.";
     if (!values.saleRate || Number(values.saleRate) <= 0) nextErrors.saleRate = "Sale rate is required.";
     if (Object.keys(nextErrors).length) { setErrors(nextErrors); return; }
-    if (sale) { saleService.update(sale.id, values); } else { saleService.create(values); }
-    setSaved(true);
-    window.setTimeout(() => router.push(sale ? `/sales/view/${sale.id}` : "/sales"), 650);
+    try {
+      if (sale) { saleService.update(sale.id, values); } else { saleService.create(values); }
+      setSaved(true);
+      window.setTimeout(() => router.push(sale ? `/sales/view/${sale.id}` : "/sales"), 650);
+    } catch (err: unknown) {
+      setErrors({ productId: err instanceof Error ? err.message : "Failed to save sale" });
+    }
   }
 
   if (saved) {
@@ -106,7 +110,7 @@ export default function SaleForm({ sale }: { sale?: Sale }) {
       <div className="mb-6"><h2 className="font-semibold">Quantity & pricing</h2><p className="mt-1 text-sm text-slate-500">Enter quantity, weight, and rate details.</p></div>
       <div className="grid gap-5 md:grid-cols-2">
         <label><span className="mb-2 block text-sm font-medium">Quantity (Bags) <span className="ml-1 text-rose-600">*</span></span><input type="number" min="1" value={values.quantity} onChange={(event) => update("quantity", event.target.value)} placeholder="0" className={`h-11 w-full rounded-xl border bg-white px-3 text-sm outline-none focus:ring-4 dark:bg-slate-800 ${errors.quantity ? "border-rose-500 focus:border-rose-500 focus:ring-rose-500/10" : "border-slate-200 focus:border-emerald-500 focus:ring-emerald-500/10 dark:border-slate-700"}`} />{errors.quantity && <span className="mt-1.5 block text-xs text-rose-600">{errors.quantity}</span>}</label>
-        <label><span className="mb-2 block text-sm font-medium">Bag Weight (KG)</span><input type="number" min="0" step="0.5" value={values.bagWeight} onChange={(event) => update("bagWeight", event.target.value)} placeholder="50" className="h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm outline-none focus:border-emerald-500 focus:ring-4 focus:ring-emerald-500/10 dark:border-slate-700 dark:bg-slate-800" /></label>
+        <label><span className="mb-2 block text-sm font-medium">Bag Weight (KG)</span><input type="number" min="0" step="0.5" value={values.bagWeight} readOnly className="h-11 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 text-sm text-slate-500 dark:border-slate-700 dark:bg-slate-800/50" /></label>
         <label><span className="mb-2 block text-sm font-medium">Total Weight (KG)</span><input type="number" value={values.totalWeight} readOnly className="h-11 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 text-sm text-slate-500 dark:border-slate-700 dark:bg-slate-800/50" /></label>
         <label><span className="mb-2 block text-sm font-medium">Sale Rate (per KG) <span className="ml-1 text-rose-600">*</span></span><input type="number" min="0" value={values.saleRate} onChange={(event) => update("saleRate", event.target.value)} placeholder="0" className={`h-11 w-full rounded-xl border bg-white px-3 text-sm outline-none focus:ring-4 dark:bg-slate-800 ${errors.saleRate ? "border-rose-500 focus:border-rose-500 focus:ring-rose-500/10" : "border-slate-200 focus:border-emerald-500 focus:ring-emerald-500/10 dark:border-slate-700"}`} />{errors.saleRate && <span className="mt-1.5 block text-xs text-rose-600">{errors.saleRate}</span>}</label>
       </div>

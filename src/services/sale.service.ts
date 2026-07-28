@@ -6,6 +6,7 @@ import { seedAll } from "@/utils/seed";
 import { customerService } from "./customer.service";
 import { warehouseService } from "./warehouse.service";
 import { productService } from "./product.service";
+import { inventoryService } from "./inventory.service";
 
 const KEY = "sales";
 const CUSTOMER_KEY = "customers";
@@ -79,6 +80,18 @@ function create(values: SaleFormValues): Sale {
   };
   setItem(KEY, [...all, sale]);
   if (values.customerId) updateCustomerBalance(values.customerId, grandTotal - receivedAmount, grandTotal, receivedAmount);
+  if (values.productId && values.warehouseId && sale.quantity > 0) {
+    const inventoryItem = inventoryService.getByProductAndWarehouse(values.productId, values.warehouseId);
+    const availableStock = inventoryItem ? inventoryItem.availableStock : 0;
+    if (availableStock < sale.quantity) {
+      throw new Error(`Insufficient stock available. Requested: ${sale.quantity}, Available: ${availableStock}`);
+    }
+    inventoryService.removeStock(values.productId, values.warehouseId, sale.quantity);
+  }
+  if (values.productId) {
+    const rate = Number(values.saleRate) || 0;
+    if (rate > 0) productService.updateSuggestedSalePrice(values.productId, rate);
+  }
   return sale;
 }
 
@@ -125,12 +138,19 @@ function update(id: string, values: SaleFormValues): Sale {
   setItem(KEY, next);
   if (old.customerId) updateCustomerBalance(old.customerId, -(old.grandTotal - old.receivedAmount), -old.grandTotal, -old.receivedAmount);
   if (values.customerId) updateCustomerBalance(values.customerId, grandTotal - receivedAmount, grandTotal, receivedAmount);
+  if (old.productId && old.warehouseId && old.quantity > 0) inventoryService.addStock(old.productId, old.warehouseId, old.quantity, { productName: old.productName, riceCode: "", category: "", warehouseName: old.warehouseName, unit: "Bag", minimumStock: 0 });
+  if (values.productId && values.warehouseId && updated.quantity > 0) inventoryService.removeStock(values.productId, values.warehouseId, updated.quantity);
+  if (values.productId) {
+    const rate = Number(values.saleRate) || 0;
+    if (rate > 0) productService.updateSuggestedSalePrice(values.productId, rate);
+  }
   return updated;
 }
 
 function remove(id: string): void {
   const sale = getById(id);
   if (sale?.customerId) updateCustomerBalance(sale.customerId, -(sale.grandTotal - sale.receivedAmount), -sale.grandTotal, -sale.receivedAmount);
+  if (sale && sale.productId && sale.warehouseId && sale.quantity > 0) inventoryService.addStock(sale.productId, sale.warehouseId, sale.quantity, { productName: sale.productName, riceCode: "", category: "", warehouseName: sale.warehouseName, unit: "Bag", minimumStock: 0 });
   setItem(KEY, getAll().filter((s) => s.id !== id));
 }
 

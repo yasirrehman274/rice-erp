@@ -1,9 +1,13 @@
 import type { Product, ProductMovement, ProductFormValues } from "@/types/product";
+import type { Purchase } from "@/types/purchase";
+import type { Sale } from "@/types/sale";
 import { getItem, setItem } from "@/lib/storage";
 import { ensureSeeded } from "@/lib/storage";
 import { seedAll } from "@/utils/seed";
 
 const KEY = "products";
+const PURCHASES_KEY = "purchases";
+const SALES_KEY = "sales";
 
 function ensure(): void { ensureSeeded(seedAll); }
 
@@ -24,8 +28,8 @@ function create(values: ProductFormValues): Product {
     variety: values.variety,
     unit: values.unit,
     bagWeight: values.bagWeight,
-    purchasePrice: Number(values.purchasePrice) || 0,
-    salePrice: Number(values.salePrice) || 0,
+    lastPurchasePrice: Number(values.lastPurchasePrice) || 0,
+    suggestedSalePrice: Number(values.suggestedSalePrice) || 0,
     minimumStock: Number(values.minimumStock) || 0,
     currentStock: 0,
     warehouseCount: 0,
@@ -50,8 +54,8 @@ function update(id: string, values: ProductFormValues): Product {
     variety: values.variety,
     unit: values.unit,
     bagWeight: values.bagWeight,
-    purchasePrice: Number(values.purchasePrice) || 0,
-    salePrice: Number(values.salePrice) || 0,
+    lastPurchasePrice: Number(values.lastPurchasePrice) || 0,
+    suggestedSalePrice: Number(values.suggestedSalePrice) || 0,
     minimumStock: Number(values.minimumStock) || 0,
     description: values.description,
     status: values.status,
@@ -80,16 +84,30 @@ function count(predicate?: (p: Product) => boolean): number {
   return predicate ? all.filter(predicate).length : all.length;
 }
 
+function updateLastPurchasePrice(id: string, price: number): void {
+  const all = getAll();
+  const idx = all.findIndex((p) => p.id === id);
+  if (idx === -1) return;
+  const next = [...all];
+  next[idx] = { ...next[idx], lastPurchasePrice: price };
+  setItem(KEY, next);
+}
+
+function updateSuggestedSalePrice(id: string, price: number): void {
+  const all = getAll();
+  const idx = all.findIndex((p) => p.id === id);
+  if (idx === -1) return;
+  const next = [...all];
+  next[idx] = { ...next[idx], suggestedSalePrice: price };
+  setItem(KEY, next);
+}
+
 function getProductMovements(product: Product): { purchases: ProductMovement[]; sales: ProductMovement[] } {
+  const purchases = getItem<Purchase>(PURCHASES_KEY) ?? [];
+  const sales = getItem<Sale>(SALES_KEY) ?? [];
   return {
-    purchases: [
-      { id: "PUR-1084", date: "2026-07-21", reference: "PUR-1084", party: "Punjab Rice Mills", quantity: "120 bags", amount: product.purchasePrice * 120, status: "Completed" },
-      { id: "PUR-1051", date: "2026-07-03", reference: "PUR-1051", party: "Ahmed Rice Traders", quantity: "80 bags", amount: product.purchasePrice * 80, status: "Completed" },
-    ],
-    sales: [
-      { id: "SAL-1284", date: "2026-07-24", reference: "SAL-1284", party: "Al Madina Traders", quantity: "60 bags", amount: product.salePrice * 60, status: "Completed" },
-      { id: "SAL-1260", date: "2026-07-10", reference: "SAL-1260", party: "Bilal Rice Traders", quantity: "45 bags", amount: product.salePrice * 45, status: "Pending" },
-    ],
+    purchases: purchases.filter((p) => p.productId === product.id).sort((a, b) => b.purchaseDate.localeCompare(a.purchaseDate)).slice(0, 10).map((p) => ({ id: p.id, date: p.purchaseDate, reference: p.purchaseNumber, party: p.supplierName, quantity: `${p.quantity} bags`, amount: p.grandTotal, status: p.status === "received" ? "Completed" as const : "Pending" as const })),
+    sales: sales.filter((s) => s.productId === product.id).sort((a, b) => b.saleDate.localeCompare(a.saleDate)).slice(0, 10).map((s) => ({ id: s.id, date: s.saleDate, reference: s.saleNumber, party: s.customerName, quantity: `${s.quantity} bags`, amount: s.grandTotal, status: s.status === "dispatched" ? "Completed" as const : "Pending" as const })),
   };
 }
 
@@ -102,5 +120,7 @@ export const productService = {
   search,
   filter,
   count,
+  updateLastPurchasePrice,
+  updateSuggestedSalePrice,
   getProductMovements,
 };

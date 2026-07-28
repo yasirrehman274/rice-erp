@@ -1,9 +1,11 @@
 import type { Warehouse, WarehouseStockItem, WarehouseFormValues } from "@/types/warehouse";
+import type { InventoryItem } from "@/types/inventory";
 import { getItem, setItem } from "@/lib/storage";
 import { ensureSeeded } from "@/lib/storage";
 import { seedAll } from "@/utils/seed";
 
 const KEY = "warehouses";
+const INVENTORY_KEY = "inventory";
 
 function ensure(): void { ensureSeeded(seedAll); }
 
@@ -78,22 +80,8 @@ function count(predicate?: (w: Warehouse) => boolean): number {
 }
 
 function getWarehouseStock(warehouse: Warehouse): WarehouseStockItem[] {
-  if (!warehouse.totalStock) return [];
-  const items = [
-    ["stk-001", "Super Kernel Basmati 50kg", "SKB-50", 0.31, 100],
-    ["stk-002", "1121 Steam Basmati 50kg", "1121-ST-50", 0.24, 80],
-    ["stk-003", "IRRI-6 White Rice 50kg", "IR6-W-50", 0.19, 150],
-    ["stk-004", "PK-386 Premium 50kg", "PK386-50", 0.14, 100],
-    ["stk-005", "Broken Rice 50kg", "BRK-50", 0.12, 200],
-  ] as const;
-  return items.map(([id, product, riceCode, ratio, minimumStock]) => ({
-    id,
-    product,
-    riceCode,
-    quantity: Math.round(warehouse.totalStock * ratio),
-    unit: "bags",
-    minimumStock,
-  }));
+  const items = getItem<InventoryItem>(INVENTORY_KEY) ?? [];
+  return items.filter((i) => i.warehouseId === warehouse.id && i.currentStock > 0).map((i) => ({ id: i.id, product: i.productName, riceCode: i.riceCode, quantity: i.currentStock, unit: i.unit, minimumStock: i.minimumStock }));
 }
 
 export const warehouseService = {

@@ -6,6 +6,7 @@ import { seedAll } from "@/utils/seed";
 import { supplierService } from "./supplier.service";
 import { warehouseService } from "./warehouse.service";
 import { productService } from "./product.service";
+import { inventoryService } from "./inventory.service";
 
 const KEY = "purchases";
 const SUPPLIER_KEY = "suppliers";
@@ -79,6 +80,15 @@ function create(values: PurchaseFormValues): Purchase {
   };
   setItem(KEY, [...all, purchase]);
   if (values.supplierId) updateSupplierBalance(values.supplierId, grandTotal - paidAmount, grandTotal, paidAmount);
+  if (values.productId && values.warehouseId && purchase.quantity > 0) {
+    const product = productService.getById(values.productId);
+    const warehouse = warehouseService.getById(values.warehouseId);
+    if (product && warehouse) inventoryService.addStock(values.productId, values.warehouseId, purchase.quantity, { productName: product.productName, riceCode: product.riceCode, category: product.category, warehouseName: warehouse.name, unit: product.unit, minimumStock: product.minimumStock });
+  }
+  if (values.productId) {
+    const rate = Number(values.purchaseRate) || 0;
+    if (rate > 0) productService.updateLastPurchasePrice(values.productId, rate);
+  }
   return purchase;
 }
 
@@ -125,12 +135,23 @@ function update(id: string, values: PurchaseFormValues): Purchase {
   setItem(KEY, next);
   if (old.supplierId) updateSupplierBalance(old.supplierId, -(old.grandTotal - old.paidAmount), -old.grandTotal, -old.paidAmount);
   if (values.supplierId) updateSupplierBalance(values.supplierId, grandTotal - paidAmount, grandTotal, paidAmount);
+  if (old.productId && old.warehouseId && old.quantity > 0) inventoryService.removeStock(old.productId, old.warehouseId, old.quantity);
+  if (values.productId && values.warehouseId && updated.quantity > 0) {
+    const product = productService.getById(values.productId);
+    const warehouse = warehouseService.getById(values.warehouseId);
+    if (product && warehouse) inventoryService.addStock(values.productId, values.warehouseId, updated.quantity, { productName: product.productName, riceCode: product.riceCode, category: product.category, warehouseName: warehouse.name, unit: product.unit, minimumStock: product.minimumStock });
+  }
+  if (values.productId) {
+    const rate = Number(values.purchaseRate) || 0;
+    if (rate > 0) productService.updateLastPurchasePrice(values.productId, rate);
+  }
   return updated;
 }
 
 function remove(id: string): void {
   const purchase = getById(id);
   if (purchase?.supplierId) updateSupplierBalance(purchase.supplierId, -(purchase.grandTotal - purchase.paidAmount), -purchase.grandTotal, -purchase.paidAmount);
+  if (purchase && purchase.productId && purchase.warehouseId && purchase.quantity > 0) inventoryService.removeStock(purchase.productId, purchase.warehouseId, purchase.quantity);
   setItem(KEY, getAll().filter((p) => p.id !== id));
 }
 
