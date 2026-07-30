@@ -63,6 +63,7 @@ function create(values: SaleFormValues): Sale {
     quantity: Number(values.quantity) || 0,
     bagWeight: Number(values.bagWeight) || 0,
     totalWeight: Number(values.totalWeight) || 0,
+    currentSalePrice: Number(values.currentSalePrice) || 0,
     saleRate: Number(values.saleRate) || 0,
     subtotal: Number(values.subtotal) || 0,
     discount: Number(values.discount) || 0,
@@ -89,8 +90,8 @@ function create(values: SaleFormValues): Sale {
     inventoryService.removeStock(values.productId, values.warehouseId, sale.quantity);
   }
   if (values.productId) {
-    const rate = Number(values.saleRate) || 0;
-    if (rate > 0) productService.updateSuggestedSalePrice(values.productId, rate);
+    const price = Number(values.currentSalePrice) || 0;
+    if (price > 0) productService.updateSuggestedSalePrice(values.productId, price);
   }
   return sale;
 }
@@ -119,6 +120,7 @@ function update(id: string, values: SaleFormValues): Sale {
     quantity: Number(values.quantity) || 0,
     bagWeight: Number(values.bagWeight) || 0,
     totalWeight: Number(values.totalWeight) || 0,
+    currentSalePrice: Number(values.currentSalePrice) || 0,
     saleRate: Number(values.saleRate) || 0,
     subtotal: Number(values.subtotal) || 0,
     discount: Number(values.discount) || 0,
@@ -141,8 +143,8 @@ function update(id: string, values: SaleFormValues): Sale {
   if (old.productId && old.warehouseId && old.quantity > 0) inventoryService.addStock(old.productId, old.warehouseId, old.quantity, { productName: old.productName, riceCode: "", category: "", warehouseName: old.warehouseName, unit: "Bag", minimumStock: 0 });
   if (values.productId && values.warehouseId && updated.quantity > 0) inventoryService.removeStock(values.productId, values.warehouseId, updated.quantity);
   if (values.productId) {
-    const rate = Number(values.saleRate) || 0;
-    if (rate > 0) productService.updateSuggestedSalePrice(values.productId, rate);
+    const price = Number(values.currentSalePrice) || 0;
+    if (price > 0) productService.updateSuggestedSalePrice(values.productId, price);
   }
   return updated;
 }

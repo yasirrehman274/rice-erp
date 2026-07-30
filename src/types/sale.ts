@@ -17,6 +17,7 @@ export interface Sale {
   quantity: number;
   bagWeight: number;
   totalWeight: number;
+  currentSalePrice: number;
   saleRate: number;
   subtotal: number;
   discount: number;
@@ -46,6 +47,7 @@ export interface SaleFormValues {
   quantity: string;
   bagWeight: string;
   totalWeight: string;
+  currentSalePrice: string;
   saleRate: string;
   subtotal: string;
   discount: string;

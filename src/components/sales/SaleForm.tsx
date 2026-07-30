@@ -9,11 +9,11 @@ import { warehouseService } from "@/services/warehouse.service";
 import { productService } from "@/services/product.service";
 import { saleService } from "@/services/sale.service";
 
-const emptyValues: SaleFormValues = { saleNumber: "", saleDate: "", customerId: "", warehouseId: "", productId: "", batchNumber: "", riceVariety: "", quantity: "", bagWeight: "", totalWeight: "", saleRate: "", subtotal: "", discount: "", transportCharges: "", otherCharges: "", grandTotal: "", receivedAmount: "", paymentMethod: "cash", status: "pending", notes: "" };
+const emptyValues: SaleFormValues = { saleNumber: "", saleDate: "", customerId: "", warehouseId: "", productId: "", batchNumber: "", riceVariety: "", quantity: "", bagWeight: "", totalWeight: "", currentSalePrice: "", saleRate: "", subtotal: "", discount: "", transportCharges: "", otherCharges: "", grandTotal: "", receivedAmount: "", paymentMethod: "cash", status: "pending", notes: "" };
 
 function toFormValues(sale?: Sale): SaleFormValues {
   return sale ? {
-    saleNumber: sale.saleNumber, saleDate: sale.saleDate, customerId: sale.customerId, warehouseId: sale.warehouseId, productId: sale.productId, batchNumber: sale.batchNumber, riceVariety: sale.riceVariety, quantity: String(sale.quantity), bagWeight: String(sale.bagWeight), totalWeight: String(sale.totalWeight), saleRate: String(sale.saleRate), subtotal: String(sale.subtotal), discount: String(sale.discount), transportCharges: String(sale.transportCharges), otherCharges: String(sale.otherCharges), grandTotal: String(sale.grandTotal), receivedAmount: String(sale.receivedAmount), paymentMethod: sale.paymentMethod, status: sale.status, notes: sale.notes,
+    saleNumber: sale.saleNumber, saleDate: sale.saleDate, customerId: sale.customerId, warehouseId: sale.warehouseId, productId: sale.productId, batchNumber: sale.batchNumber, riceVariety: sale.riceVariety, quantity: String(sale.quantity), bagWeight: String(sale.bagWeight), totalWeight: String(sale.totalWeight), currentSalePrice: String(sale.currentSalePrice), saleRate: String(sale.saleRate), subtotal: String(sale.subtotal), discount: String(sale.discount), transportCharges: String(sale.transportCharges), otherCharges: String(sale.otherCharges), grandTotal: String(sale.grandTotal), receivedAmount: String(sale.receivedAmount), paymentMethod: sale.paymentMethod, status: sale.status, notes: sale.notes,
   } : emptyValues;
 }
 
@@ -30,6 +30,8 @@ export default function SaleForm({ sale }: { sale?: Sale }) {
   const [customers, setCustomers] = useState<import("@/types/customer").Customer[]>([]);
   const [warehouses, setWarehouses] = useState<import("@/types/warehouse").Warehouse[]>([]);
   const [products, setProducts] = useState<import("@/types/product").Product[]>([]);
+  const [lastPurchasePriceRef, setLastPurchasePriceRef] = useState("");
+  const [suggestedSalePriceRef, setSuggestedSalePriceRef] = useState("");
 
   useEffect(() => { setCustomers(customerService.getAll()); setWarehouses(warehouseService.getAll()); setProducts(productService.getAll()); }, []);
 
@@ -42,21 +44,32 @@ export default function SaleForm({ sale }: { sale?: Sale }) {
   useEffect(() => {
     const qty = Number(values.quantity) || 0;
     const bagWt = Number(values.bagWeight) || 0;
-    const rate = Number(values.saleRate) || 0;
+    const csp = Number(values.currentSalePrice) || 0;
     const totalWeight = qty * bagWt;
-    const subtotal = totalWeight * rate;
+    const saleRate = totalWeight > 0 ? (csp * qty) / totalWeight : 0;
+    const subtotal = totalWeight * saleRate;
     const discount = Number(values.discount) || 0;
     const transport = Number(values.transportCharges) || 0;
     const other = Number(values.otherCharges) || 0;
     const grandTotal = subtotal - discount + transport + other;
-    setValues((current) => ({ ...current, totalWeight: String(totalWeight), subtotal: String(subtotal), grandTotal: String(grandTotal) }));
-  }, [values.quantity, values.bagWeight, values.saleRate, values.discount, values.transportCharges, values.otherCharges]);
+    setValues((current) => ({ ...current, totalWeight: String(totalWeight), saleRate: String(saleRate), subtotal: String(subtotal), grandTotal: String(grandTotal) }));
+  }, [values.quantity, values.bagWeight, values.currentSalePrice, values.discount, values.transportCharges, values.otherCharges]);
 
   useEffect(() => {
     if (sale) return;
     const selectedProduct = products.find((p) => p.id === values.productId);
     if (selectedProduct) {
-      setValues((current) => ({ ...current, bagWeight: selectedProduct.bagWeight.replace(/[^\d.]/g, ""), saleRate: String(selectedProduct.suggestedSalePrice), riceVariety: selectedProduct.variety }));
+      setValues((current) => ({
+        ...current,
+        bagWeight: selectedProduct.bagWeight.replace(/[^\d.]/g, ""),
+        currentSalePrice: String(selectedProduct.suggestedSalePrice),
+        riceVariety: selectedProduct.variety,
+      }));
+      setLastPurchasePriceRef(String(selectedProduct.lastPurchasePrice));
+      setSuggestedSalePriceRef(String(selectedProduct.suggestedSalePrice));
+    } else {
+      setLastPurchasePriceRef("");
+      setSuggestedSalePriceRef("");
     }
   }, [values.productId, sale]);
 
@@ -74,7 +87,7 @@ export default function SaleForm({ sale }: { sale?: Sale }) {
     if (!values.warehouseId) nextErrors.warehouseId = "Warehouse is required.";
     if (!values.productId) nextErrors.productId = "Product is required.";
     if (!values.quantity || Number(values.quantity) <= 0) nextErrors.quantity = "Quantity must be greater than 0.";
-    if (!values.saleRate || Number(values.saleRate) <= 0) nextErrors.saleRate = "Sale rate is required.";
+    if (!values.currentSalePrice || Number(values.currentSalePrice) <= 0) nextErrors.currentSalePrice = "Current sale price is required.";
     if (Object.keys(nextErrors).length) { setErrors(nextErrors); return; }
     try {
       if (sale) { saleService.update(sale.id, values); } else { saleService.create(values); }
@@ -109,10 +122,13 @@ export default function SaleForm({ sale }: { sale?: Sale }) {
     <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900 sm:p-6">
       <div className="mb-6"><h2 className="font-semibold">Quantity & pricing</h2><p className="mt-1 text-sm text-slate-500">Enter quantity, weight, and rate details.</p></div>
       <div className="grid gap-5 md:grid-cols-2">
+        <label><span className="mb-2 block text-sm font-medium">Last Purchase Price (Reference)</span><input type="number" value={lastPurchasePriceRef} readOnly className="h-11 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 text-sm text-slate-500 dark:border-slate-700 dark:bg-slate-800/50" /></label>
+        <label><span className="mb-2 block text-sm font-medium">Suggested Sale Price (Reference)</span><input type="number" value={suggestedSalePriceRef} readOnly className="h-11 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 text-sm text-slate-500 dark:border-slate-700 dark:bg-slate-800/50" /></label>
+        <label><span className="mb-2 block text-sm font-medium">Current Sale Price <span className="ml-1 text-rose-600">*</span></span><input type="number" min="0" value={values.currentSalePrice} onChange={(event) => update("currentSalePrice", event.target.value)} placeholder="0" className={`h-11 w-full rounded-xl border bg-white px-3 text-sm outline-none focus:ring-4 dark:bg-slate-800 ${errors.currentSalePrice ? "border-rose-500 focus:border-rose-500 focus:ring-rose-500/10" : "border-slate-200 focus:border-emerald-500 focus:ring-emerald-500/10 dark:border-slate-700"}`} />{errors.currentSalePrice && <span className="mt-1.5 block text-xs text-rose-600">{errors.currentSalePrice}</span>}</label>
         <label><span className="mb-2 block text-sm font-medium">Quantity (Bags) <span className="ml-1 text-rose-600">*</span></span><input type="number" min="1" value={values.quantity} onChange={(event) => update("quantity", event.target.value)} placeholder="0" className={`h-11 w-full rounded-xl border bg-white px-3 text-sm outline-none focus:ring-4 dark:bg-slate-800 ${errors.quantity ? "border-rose-500 focus:border-rose-500 focus:ring-rose-500/10" : "border-slate-200 focus:border-emerald-500 focus:ring-emerald-500/10 dark:border-slate-700"}`} />{errors.quantity && <span className="mt-1.5 block text-xs text-rose-600">{errors.quantity}</span>}</label>
         <label><span className="mb-2 block text-sm font-medium">Bag Weight (KG)</span><input type="number" min="0" step="0.5" value={values.bagWeight} readOnly className="h-11 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 text-sm text-slate-500 dark:border-slate-700 dark:bg-slate-800/50" /></label>
         <label><span className="mb-2 block text-sm font-medium">Total Weight (KG)</span><input type="number" value={values.totalWeight} readOnly className="h-11 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 text-sm text-slate-500 dark:border-slate-700 dark:bg-slate-800/50" /></label>
-        <label><span className="mb-2 block text-sm font-medium">Sale Rate (per KG) <span className="ml-1 text-rose-600">*</span></span><input type="number" min="0" value={values.saleRate} onChange={(event) => update("saleRate", event.target.value)} placeholder="0" className={`h-11 w-full rounded-xl border bg-white px-3 text-sm outline-none focus:ring-4 dark:bg-slate-800 ${errors.saleRate ? "border-rose-500 focus:border-rose-500 focus:ring-rose-500/10" : "border-slate-200 focus:border-emerald-500 focus:ring-emerald-500/10 dark:border-slate-700"}`} />{errors.saleRate && <span className="mt-1.5 block text-xs text-rose-600">{errors.saleRate}</span>}</label>
+        <label><span className="mb-2 block text-sm font-medium">Sale Rate (per KG)</span><input type="number" value={values.saleRate} readOnly className="h-11 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 text-sm text-slate-500 dark:border-slate-700 dark:bg-slate-800/50" /></label>
       </div>
     </section>
 

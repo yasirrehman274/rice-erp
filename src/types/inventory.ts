@@ -14,6 +14,7 @@ export interface InventoryItem {
   availableStock: number;
   minimumStock: number;
   unit: string;
+  averageCostPerKG: number;
   updatedAt: string;
 }
 

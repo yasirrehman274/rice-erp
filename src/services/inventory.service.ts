@@ -55,17 +55,21 @@ function syncWarehouseStats(warehouseId: string): void {
   setItem(WAREHOUSES_KEY, next);
 }
 
-function addStock(productId: string, warehouseId: string, quantity: number, meta: { productName: string; riceCode: string; category: string; warehouseName: string; unit: string; minimumStock: number }): InventoryItem {
+function addStock(productId: string, warehouseId: string, quantity: number, meta: { productName: string; riceCode: string; category: string; warehouseName: string; unit: string; minimumStock: number; purchaseRate?: number }): InventoryItem {
   const all = getAll();
   const existing = all.find((i) => i.productId === productId && i.warehouseId === warehouseId);
   const now = new Date().toISOString().slice(0, 10);
   let item: InventoryItem;
   if (existing) {
-    item = { ...existing, currentStock: existing.currentStock + quantity, availableStock: existing.currentStock + quantity - existing.reservedStock, updatedAt: now };
+    const purchaseRate = meta.purchaseRate ?? existing.averageCostPerKG;
+    const oldCost = existing.averageCostPerKG * existing.currentStock;
+    const newCost = purchaseRate * quantity;
+    const avgCost = (existing.currentStock + quantity) > 0 ? (oldCost + newCost) / (existing.currentStock + quantity) : 0;
+    item = { ...existing, currentStock: existing.currentStock + quantity, availableStock: existing.currentStock + quantity - existing.reservedStock, averageCostPerKG: avgCost, updatedAt: now };
     const idx = all.findIndex((i) => i.id === existing.id);
     all[idx] = item;
   } else {
-    item = { id: generateId(all), productId, productName: meta.productName, riceCode: meta.riceCode, category: meta.category, warehouseId, warehouseName: meta.warehouseName, currentStock: quantity, reservedStock: 0, availableStock: quantity, minimumStock: meta.minimumStock, unit: meta.unit, updatedAt: now };
+    item = { id: generateId(all), productId, productName: meta.productName, riceCode: meta.riceCode, category: meta.category, warehouseId, warehouseName: meta.warehouseName, currentStock: quantity, reservedStock: 0, availableStock: quantity, minimumStock: meta.minimumStock, unit: meta.unit, averageCostPerKG: meta.purchaseRate ?? 0, updatedAt: now };
     all.push(item);
   }
   setItem(KEY, all);

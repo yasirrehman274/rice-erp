@@ -17,6 +17,7 @@ export interface Purchase {
   quantity: number;
   bagWeight: number;
   totalWeight: number;
+  currentPurchasePrice: number;
   purchaseRate: number;
   subtotal: number;
   discount: number;
@@ -46,6 +47,7 @@ export interface PurchaseFormValues {
   quantity: string;
   bagWeight: string;
   totalWeight: string;
+  currentPurchasePrice: string;
   purchaseRate: string;
   subtotal: string;
   discount: string;

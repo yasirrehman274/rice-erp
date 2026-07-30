@@ -63,6 +63,7 @@ function create(values: PurchaseFormValues): Purchase {
     quantity: Number(values.quantity) || 0,
     bagWeight: Number(values.bagWeight) || 0,
     totalWeight: Number(values.totalWeight) || 0,
+    currentPurchasePrice: Number(values.currentPurchasePrice) || 0,
     purchaseRate: Number(values.purchaseRate) || 0,
     subtotal: Number(values.subtotal) || 0,
     discount: Number(values.discount) || 0,
@@ -83,11 +84,11 @@ function create(values: PurchaseFormValues): Purchase {
   if (values.productId && values.warehouseId && purchase.quantity > 0) {
     const product = productService.getById(values.productId);
     const warehouse = warehouseService.getById(values.warehouseId);
-    if (product && warehouse) inventoryService.addStock(values.productId, values.warehouseId, purchase.quantity, { productName: product.productName, riceCode: product.riceCode, category: product.category, warehouseName: warehouse.name, unit: product.unit, minimumStock: product.minimumStock });
+    if (product && warehouse) inventoryService.addStock(values.productId, values.warehouseId, purchase.quantity, { productName: product.productName, riceCode: product.riceCode, category: product.category, warehouseName: warehouse.name, unit: product.unit, minimumStock: product.minimumStock, purchaseRate: purchase.purchaseRate });
   }
   if (values.productId) {
-    const rate = Number(values.purchaseRate) || 0;
-    if (rate > 0) productService.updateLastPurchasePrice(values.productId, rate);
+    const price = Number(values.currentPurchasePrice) || 0;
+    if (price > 0) productService.updateLastPurchasePrice(values.productId, price);
   }
   return purchase;
 }
@@ -116,6 +117,7 @@ function update(id: string, values: PurchaseFormValues): Purchase {
     quantity: Number(values.quantity) || 0,
     bagWeight: Number(values.bagWeight) || 0,
     totalWeight: Number(values.totalWeight) || 0,
+    currentPurchasePrice: Number(values.currentPurchasePrice) || 0,
     purchaseRate: Number(values.purchaseRate) || 0,
     subtotal: Number(values.subtotal) || 0,
     discount: Number(values.discount) || 0,
@@ -139,11 +141,11 @@ function update(id: string, values: PurchaseFormValues): Purchase {
   if (values.productId && values.warehouseId && updated.quantity > 0) {
     const product = productService.getById(values.productId);
     const warehouse = warehouseService.getById(values.warehouseId);
-    if (product && warehouse) inventoryService.addStock(values.productId, values.warehouseId, updated.quantity, { productName: product.productName, riceCode: product.riceCode, category: product.category, warehouseName: warehouse.name, unit: product.unit, minimumStock: product.minimumStock });
+    if (product && warehouse) inventoryService.addStock(values.productId, values.warehouseId, updated.quantity, { productName: product.productName, riceCode: product.riceCode, category: product.category, warehouseName: warehouse.name, unit: product.unit, minimumStock: product.minimumStock, purchaseRate: updated.purchaseRate });
   }
   if (values.productId) {
-    const rate = Number(values.purchaseRate) || 0;
-    if (rate > 0) productService.updateLastPurchasePrice(values.productId, rate);
+    const price = Number(values.currentPurchasePrice) || 0;
+    if (price > 0) productService.updateLastPurchasePrice(values.productId, price);
   }
   return updated;
 }

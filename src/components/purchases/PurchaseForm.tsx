@@ -20,6 +20,7 @@ const emptyValues: PurchaseFormValues = {
   quantity: "",
   bagWeight: "",
   totalWeight: "",
+  currentPurchasePrice: "",
   purchaseRate: "",
   subtotal: "",
   discount: "",
@@ -45,6 +46,7 @@ function toFormValues(purchase?: Purchase): PurchaseFormValues {
         quantity: String(purchase.quantity),
         bagWeight: String(purchase.bagWeight),
         totalWeight: String(purchase.totalWeight),
+        currentPurchasePrice: String(purchase.currentPurchasePrice || purchase.purchaseRate),
         purchaseRate: String(purchase.purchaseRate),
         subtotal: String(purchase.subtotal),
         discount: String(purchase.discount),
@@ -87,6 +89,8 @@ export default function PurchaseForm({ purchase }: { purchase?: Purchase }) {
   const [products, setProducts] = useState<import("@/types/product").Product[]>(
     [],
   );
+  const [lastPurchasePriceRef, setLastPurchasePriceRef] = useState("");
+  const [suggestedSalePriceRef, setSuggestedSalePriceRef] = useState("");
 
   useEffect(() => {
     setSuppliers(supplierService.getAll());
@@ -108,9 +112,10 @@ export default function PurchaseForm({ purchase }: { purchase?: Purchase }) {
   useEffect(() => {
     const qty = Number(values.quantity) || 0;
     const bagWt = Number(values.bagWeight) || 0;
-    const rate = Number(values.purchaseRate) || 0;
+    const cpp = Number(values.currentPurchasePrice) || 0;
     const totalWeight = qty * bagWt;
-    const subtotal = totalWeight * rate;
+    const purchaseRate = totalWeight > 0 ? (cpp * qty) / totalWeight : 0;
+    const subtotal = totalWeight * purchaseRate;
     const discount = Number(values.discount) || 0;
     const transport = Number(values.transportCharges) || 0;
     const other = Number(values.otherCharges) || 0;
@@ -118,13 +123,14 @@ export default function PurchaseForm({ purchase }: { purchase?: Purchase }) {
     setValues((current) => ({
       ...current,
       totalWeight: String(totalWeight),
+      purchaseRate: String(purchaseRate),
       subtotal: String(subtotal),
       grandTotal: String(grandTotal),
     }));
   }, [
     values.quantity,
     values.bagWeight,
-    values.purchaseRate,
+    values.currentPurchasePrice,
     values.discount,
     values.transportCharges,
     values.otherCharges,
@@ -137,9 +143,14 @@ export default function PurchaseForm({ purchase }: { purchase?: Purchase }) {
       setValues((current) => ({
         ...current,
         bagWeight: selectedProduct.bagWeight.replace(/[^\d.]/g, ""),
-        purchaseRate: String(selectedProduct.lastPurchasePrice),
+        currentPurchasePrice: String(selectedProduct.lastPurchasePrice),
         riceVariety: selectedProduct.variety,
       }));
+      setLastPurchasePriceRef(String(selectedProduct.lastPurchasePrice));
+      setSuggestedSalePriceRef(String(selectedProduct.suggestedSalePrice));
+    } else {
+      setLastPurchasePriceRef("");
+      setSuggestedSalePriceRef("");
     }
   }, [values.productId, purchase]);
 
@@ -160,8 +171,8 @@ export default function PurchaseForm({ purchase }: { purchase?: Purchase }) {
     if (!values.productId) nextErrors.productId = "Product is required.";
     if (!values.quantity || Number(values.quantity) <= 0)
       nextErrors.quantity = "Quantity must be greater than 0.";
-    if (!values.purchaseRate || Number(values.purchaseRate) <= 0)
-      nextErrors.purchaseRate = "Purchase rate is required.";
+    if (!values.currentPurchasePrice || Number(values.currentPurchasePrice) <= 0)
+      nextErrors.currentPurchasePrice = "Current purchase price is required.";
     if (Object.keys(nextErrors).length) {
       setErrors(nextErrors);
       return;
@@ -364,6 +375,46 @@ export default function PurchaseForm({ purchase }: { purchase?: Purchase }) {
         <div className="grid gap-5 md:grid-cols-2">
           <label>
             <span className="mb-2 block text-sm font-medium">
+              Last Purchase Price (Reference)
+            </span>
+            <input
+              type="number"
+              value={lastPurchasePriceRef}
+              readOnly
+              className="h-11 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 text-sm text-slate-500 dark:border-slate-700 dark:bg-slate-800/50"
+            />
+          </label>
+          <label>
+            <span className="mb-2 block text-sm font-medium">
+              Suggested Sale Price (Reference)
+            </span>
+            <input
+              type="number"
+              value={suggestedSalePriceRef}
+              readOnly
+              className="h-11 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 text-sm text-slate-500 dark:border-slate-700 dark:bg-slate-800/50"
+            />
+          </label>
+          <label>
+            <span className="mb-2 block text-sm font-medium">
+              Current Purchase Price <span className="ml-1 text-rose-600">*</span>
+            </span>
+            <input
+              type="number"
+              min="0"
+              value={values.currentPurchasePrice}
+              onChange={(event) => update("currentPurchasePrice", event.target.value)}
+              placeholder="0"
+              className={`h-11 w-full rounded-xl border bg-white px-3 text-sm outline-none focus:ring-4 dark:bg-slate-800 ${errors.currentPurchasePrice ? "border-rose-500 focus:border-rose-500 focus:ring-rose-500/10" : "border-slate-200 focus:border-emerald-500 focus:ring-emerald-500/10 dark:border-slate-700"}`}
+            />
+            {errors.currentPurchasePrice && (
+              <span className="mt-1.5 block text-xs text-rose-600">
+                {errors.currentPurchasePrice}
+              </span>
+            )}
+          </label>
+          <label>
+            <span className="mb-2 block text-sm font-medium">
               Quantity (Bags) <span className="ml-1 text-rose-600">*</span>
             </span>
             <input
@@ -404,24 +455,17 @@ export default function PurchaseForm({ purchase }: { purchase?: Purchase }) {
               className="h-11 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 text-sm text-slate-500 dark:border-slate-700 dark:bg-slate-800/50"
             />
           </label>
+
           <label>
             <span className="mb-2 block text-sm font-medium">
-              Purchase Rate (per KG){" "}
-              <span className="ml-1 text-rose-600">*</span>
+              Purchase Rate (per KG)
             </span>
             <input
               type="number"
-              min="0"
               value={values.purchaseRate}
-              onChange={(event) => update("purchaseRate", event.target.value)}
-              placeholder="0"
-              className={`h-11 w-full rounded-xl border bg-white px-3 text-sm outline-none focus:ring-4 dark:bg-slate-800 ${errors.purchaseRate ? "border-rose-500 focus:border-rose-500 focus:ring-rose-500/10" : "border-slate-200 focus:border-emerald-500 focus:ring-emerald-500/10 dark:border-slate-700"}`}
+              readOnly
+              className="h-11 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 text-sm text-slate-500 dark:border-slate-700 dark:bg-slate-800/50"
             />
-            {errors.purchaseRate && (
-              <span className="mt-1.5 block text-xs text-rose-600">
-                {errors.purchaseRate}
-              </span>
-            )}
           </label>
         </div>
       </section>
