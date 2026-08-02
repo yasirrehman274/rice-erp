@@ -1,21 +1,42 @@
 import type { Purchase, PurchasePayment, PurchaseHistoryEntry, PurchaseFormValues } from "@/types/purchase";
-import type { Supplier } from "@/types/supplier";
-import { getItem, setItem } from "@/lib/storage";
-import { ensureSeeded } from "@/lib/storage";
+import { getItem, setItem, ensureSeeded } from "@/lib/storage";
 import { seedAll } from "@/utils/seed";
+import { apiRequest } from "@/lib/api";
 import { supplierService } from "./supplier.service";
 import { warehouseService } from "./warehouse.service";
 import { productService } from "./product.service";
 import { inventoryService } from "./inventory.service";
 
 const KEY = "purchases";
-const SUPPLIER_KEY = "suppliers";
 
-function ensure(): void { ensureSeeded(seedAll); }
+let cache: Purchase[] | null = null;
+let hydrated = false;
+let inFlight: Promise<Purchase[]> | null = null;
 
-function getAll(): Purchase[] { ensure(); return getItem<Purchase>(KEY) ?? []; }
+function ensure(): void {
+  ensureSeeded(seedAll);
+  if (cache === null) cache = getItem<Purchase>(KEY) ?? [];
+  hydrate();
+}
 
-function getById(id: string): Purchase | undefined { return getAll().find((p) => p.id === id); }
+function persist(): void {
+  setItem(KEY, cache ?? []);
+}
+
+function hydrate(): void {
+  if (typeof window === "undefined" || hydrated) return;
+  hydrated = true;
+  void refresh().catch(() => {
+    hydrated = false;
+  });
+}
+
+function nextId(existing: Purchase[]): string {
+  const ids = new Set(existing.map((p) => p.id));
+  let n = 1;
+  while (ids.has(`pur-${String(n).padStart(3, "0")}`)) n += 1;
+  return `pur-${String(n).padStart(3, "0")}`;
+}
 
 function resolveNames(values: PurchaseFormValues): { supplierName: string; warehouseName: string; productName: string } {
   const supplier = supplierService.getById(values.supplierId);
@@ -24,31 +45,12 @@ function resolveNames(values: PurchaseFormValues): { supplierName: string; wareh
   return { supplierName: supplier?.name ?? "", warehouseName: warehouse?.name ?? "", productName: product?.productName ?? "" };
 }
 
-function generateId(prefix: string, all: Purchase[]): string {
-  const ids = all.map((p) => p.id).filter((id) => id.startsWith(`${prefix}-`));
-  const nums = ids.map((id) => parseInt(id.split("-")[1], 10)).filter((n) => !isNaN(n));
-  const next = nums.length > 0 ? Math.max(...nums) + 1 : 1;
-  return `${prefix}-${String(next).padStart(3, "0")}`;
-}
-
-function updateSupplierBalance(supplierId: string, deltaBalance: number, deltaPurchases: number, deltaPaid: number): void {
-  const suppliers = getItem<Supplier>(SUPPLIER_KEY) ?? [];
-  const idx = suppliers.findIndex((s) => s.id === supplierId);
-  if (idx === -1) return;
-  const s = suppliers[idx];
-  const next = [...suppliers];
-  next[idx] = { ...s, currentBalance: s.currentBalance + deltaBalance, totalPurchases: s.totalPurchases + deltaPurchases, totalPaid: s.totalPaid + deltaPaid };
-  setItem(SUPPLIER_KEY, next);
-}
-
-function create(values: PurchaseFormValues): Purchase {
-  const all = getAll();
-  const id = generateId("pur", all);
+function toPurchase(values: PurchaseFormValues, id: string): Purchase {
   const now = new Date().toISOString().slice(0, 10);
   const names = resolveNames(values);
   const grandTotal = Number(values.grandTotal) || 0;
   const paidAmount = Number(values.paidAmount) || 0;
-  const purchase: Purchase = {
+  return {
     id,
     purchaseNumber: values.purchaseNumber,
     purchaseDate: values.purchaseDate,
@@ -79,82 +81,144 @@ function create(values: PurchaseFormValues): Purchase {
     createdAt: now,
     updatedAt: now,
   };
-  setItem(KEY, [...all, purchase]);
-  if (values.supplierId) updateSupplierBalance(values.supplierId, grandTotal - paidAmount, grandTotal, paidAmount);
-  if (values.productId && values.warehouseId && purchase.quantity > 0) {
-    const product = productService.getById(values.productId);
-    const warehouse = warehouseService.getById(values.warehouseId);
-    if (product && warehouse) inventoryService.addStock(values.productId, values.warehouseId, purchase.quantity, { productName: product.productName, riceCode: product.riceCode, category: product.category, warehouseName: warehouse.name, unit: product.unit, minimumStock: product.minimumStock, purchaseRate: purchase.purchaseRate });
+}
+
+function replaceRecord(record: Purchase): void {
+  cache = [...(cache ?? []).filter((p) => p.id !== record.id), record];
+  persist();
+}
+
+function dropRecord(id: string): void {
+  cache = (cache ?? []).filter((p) => p.id !== id);
+  persist();
+}
+
+function syncDependents(): void {
+  void Promise.allSettled([
+    supplierService.refresh(),
+    inventoryService.refresh(),
+    productService.refresh(),
+    warehouseService.refresh(),
+  ]);
+}
+
+async function refresh(): Promise<Purchase[]> {
+  if (inFlight) return inFlight;
+  inFlight = doRefresh().finally(() => {
+    inFlight = null;
+  });
+  return inFlight;
+}
+
+async function doRefresh(): Promise<Purchase[]> {
+  let data = await apiRequest<Purchase[]>("/purchases");
+  if (data.length === 0) {
+    const local = getItem<Purchase>(KEY) ?? [];
+    if (local.length > 0) {
+      let migrated = 0;
+      for (const item of local) {
+        try {
+          await apiRequest<Purchase>("/purchases/import", { method: "POST", body: item });
+          migrated += 1;
+        } catch {
+          // Skip records that already exist on the server.
+        }
+      }
+      if (migrated > 0) data = await apiRequest<Purchase[]>("/purchases");
+    }
   }
-  if (values.productId) {
-    const price = Number(values.currentPurchasePrice) || 0;
-    if (price > 0) productService.updateLastPurchasePrice(values.productId, price);
+  if (data.length > 0) {
+    cache = data;
+    persist();
+  } else {
+    cache = getItem<Purchase>(KEY) ?? [];
   }
-  return purchase;
+  return cache;
+}
+
+async function fetchById(id: string): Promise<Purchase | null> {
+  try {
+    return await apiRequest<Purchase>(`/purchases/${encodeURIComponent(id)}`);
+  } catch (error) {
+    if (error instanceof Error && "status" in error && (error as { status: number }).status === 404) {
+      return null;
+    }
+    throw error;
+  }
+}
+
+async function fetchCreate(values: PurchaseFormValues, id?: string): Promise<Purchase> {
+  ensure();
+  const recordId = id ?? nextId(cache ?? []);
+  const record = await apiRequest<Purchase>("/purchases", {
+    method: "POST",
+    body: toPurchase(values, recordId),
+  });
+  replaceRecord(record);
+  syncDependents();
+  return record;
+}
+
+async function fetchUpdate(id: string, values: PurchaseFormValues): Promise<Purchase> {
+  ensure();
+  const existing = (cache ?? []).find((p) => p.id === id);
+  if (!existing) throw new Error("Purchase not found");
+  const record = await apiRequest<Purchase>(`/purchases/${encodeURIComponent(id)}`, {
+    method: "PUT",
+    body: { ...existing, ...toPurchase(values, id) },
+  });
+  replaceRecord(record);
+  syncDependents();
+  return record;
+}
+
+async function fetchDelete(id: string): Promise<void> {
+  await apiRequest<void>(`/purchases/${encodeURIComponent(id)}`, { method: "DELETE" });
+  dropRecord(id);
+  syncDependents();
+}
+
+function getAll(): Purchase[] {
+  ensure();
+  return cache ?? [];
+}
+
+function getById(id: string): Purchase | undefined {
+  return getAll().find((p) => p.id === id);
+}
+
+function create(values: PurchaseFormValues): Purchase {
+  ensure();
+  const optimistic = toPurchase(values, nextId(cache ?? []));
+  cache = [...(cache ?? []), optimistic];
+  persist();
+  void fetchCreate(values, optimistic.id)
+    .then((record) => replaceRecord(record))
+    .catch(() => dropRecord(optimistic.id));
+  return optimistic;
 }
 
 function update(id: string, values: PurchaseFormValues): Purchase {
-  const all = getAll();
-  const idx = all.findIndex((p) => p.id === id);
+  ensure();
+  const idx = (cache ?? []).findIndex((p) => p.id === id);
   if (idx === -1) throw new Error("Purchase not found");
-  const old = all[idx];
-  const now = new Date().toISOString().slice(0, 10);
-  const grandTotal = Number(values.grandTotal) || 0;
-  const paidAmount = Number(values.paidAmount) || 0;
-  const names = resolveNames(values);
-  const updated: Purchase = {
-    ...old,
-    purchaseNumber: values.purchaseNumber,
-    purchaseDate: values.purchaseDate,
-    supplierId: values.supplierId,
-    supplierName: names.supplierName,
-    warehouseId: values.warehouseId,
-    warehouseName: names.warehouseName,
-    productId: values.productId,
-    productName: names.productName,
-    batchNumber: values.batchNumber,
-    riceVariety: values.riceVariety,
-    quantity: Number(values.quantity) || 0,
-    bagWeight: Number(values.bagWeight) || 0,
-    totalWeight: Number(values.totalWeight) || 0,
-    currentPurchasePrice: Number(values.currentPurchasePrice) || 0,
-    purchaseRate: Number(values.purchaseRate) || 0,
-    subtotal: Number(values.subtotal) || 0,
-    discount: Number(values.discount) || 0,
-    transportCharges: Number(values.transportCharges) || 0,
-    otherCharges: Number(values.otherCharges) || 0,
-    grandTotal,
-    paidAmount,
-    remainingBalance: grandTotal - paidAmount,
-    paymentMethod: values.paymentMethod,
-    status: values.status,
-    paymentStatus: paidAmount >= grandTotal ? "paid" : paidAmount > 0 ? "partial" : "unpaid",
-    notes: values.notes,
-    updatedAt: now,
-  };
-  const next = [...all];
-  next[idx] = updated;
-  setItem(KEY, next);
-  if (old.supplierId) updateSupplierBalance(old.supplierId, -(old.grandTotal - old.paidAmount), -old.grandTotal, -old.paidAmount);
-  if (values.supplierId) updateSupplierBalance(values.supplierId, grandTotal - paidAmount, grandTotal, paidAmount);
-  if (old.productId && old.warehouseId && old.quantity > 0) inventoryService.removeStock(old.productId, old.warehouseId, old.quantity);
-  if (values.productId && values.warehouseId && updated.quantity > 0) {
-    const product = productService.getById(values.productId);
-    const warehouse = warehouseService.getById(values.warehouseId);
-    if (product && warehouse) inventoryService.addStock(values.productId, values.warehouseId, updated.quantity, { productName: product.productName, riceCode: product.riceCode, category: product.category, warehouseName: warehouse.name, unit: product.unit, minimumStock: product.minimumStock, purchaseRate: updated.purchaseRate });
-  }
-  if (values.productId) {
-    const price = Number(values.currentPurchasePrice) || 0;
-    if (price > 0) productService.updateLastPurchasePrice(values.productId, price);
-  }
+  const previous = cache![idx];
+  const updated = toPurchase(values, id);
+  cache![idx] = updated;
+  persist();
+  void fetchUpdate(id, values)
+    .then((record) => replaceRecord(record))
+    .catch(() => replaceRecord(previous));
   return updated;
 }
 
 function remove(id: string): void {
-  const purchase = getById(id);
-  if (purchase?.supplierId) updateSupplierBalance(purchase.supplierId, -(purchase.grandTotal - purchase.paidAmount), -purchase.grandTotal, -purchase.paidAmount);
-  if (purchase && purchase.productId && purchase.warehouseId && purchase.quantity > 0) inventoryService.removeStock(purchase.productId, purchase.warehouseId, purchase.quantity);
-  setItem(KEY, getAll().filter((p) => p.id !== id));
+  ensure();
+  const previous = (cache ?? []).find((p) => p.id === id);
+  dropRecord(id);
+  void fetchDelete(id).catch(() => {
+    if (previous) replaceRecord(previous);
+  });
 }
 
 function search(query: string): Purchase[] {
@@ -212,4 +276,9 @@ export const purchaseService = {
   count,
   getPurchasePayments,
   getPurchaseHistory,
+  refresh,
+  fetchById,
+  fetchCreate,
+  fetchUpdate,
+  fetchDelete,
 };

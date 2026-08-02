@@ -1,15 +1,18 @@
 "use client";
 
 import InventoryPageActions from "@/components/inventory/InventoryPageActions";
-import InventoryTable from "@/components/inventory/InventoryTable";
+import InventoryTable, { InventoryTableSkeleton } from "@/components/inventory/InventoryTable";
 import { inventoryService } from "@/services/inventory.service";
 import { useState, useEffect } from "react";
 import type { InventoryItem } from "@/types/inventory";
 
 export default function InventoryPage() {
   const [inventoryItems, setInventoryItems] = useState<InventoryItem[]>([]);
+  const [loading, setLoading] = useState(true);
   useEffect(() => {
-    setInventoryItems(inventoryService.getAll());
+    let mounted = true;
+    inventoryService.refresh().then((data) => { if (mounted) setInventoryItems(data); }).catch(() => { if (mounted) setInventoryItems(inventoryService.getAll()); }).finally(() => { if (mounted) setLoading(false); });
+    return () => { mounted = false; };
   }, []);
   const total = inventoryItems.reduce(
     (sum, item) => sum + item.currentStock,
@@ -47,7 +50,7 @@ export default function InventoryPage() {
         />
         <Stat label="Low stock alerts" value={String(low)} alert={low > 0} />
       </div>
-      <InventoryTable initialItems={inventoryItems} />
+      {loading && inventoryItems.length === 0 ? <InventoryTableSkeleton /> : <InventoryTable initialItems={inventoryItems} />}
     </div>
   );
 }

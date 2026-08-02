@@ -1,8 +1,8 @@
 "use client";
 
-import { ChevronsUpDown, Eye, FileText, Pencil, Printer, Search, Trash2, Truck } from "lucide-react";
+import { ChevronsUpDown, Eye, Pencil, Printer, Search, Trash2, Truck } from "lucide-react";
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { formatCurrency, formatDate } from "@/lib/utils";
 import type { Purchase, PurchaseStatus, PurchasePaymentStatus } from "@/types/purchase";
 import DeletePurchaseDialog from "./DeletePurchaseDialog";
@@ -19,7 +19,11 @@ export function PurchaseTableSkeleton() {
 
 export default function PurchaseTable({ initialPurchases }: { initialPurchases: Purchase[] }) {
   const [purchases, setPurchases] = useState<Purchase[]>(initialPurchases);
-  useEffect(() => { setPurchases(purchaseService.getAll()); }, []);
+  const [prevInitial, setPrevInitial] = useState(initialPurchases);
+  if (prevInitial !== initialPurchases) {
+    setPrevInitial(initialPurchases);
+    setPurchases(initialPurchases);
+  }
   const [query, setQuery] = useState("");
   const [status, setStatus] = useState<"all" | PurchaseStatus>("all");
   const [paymentStatus, setPaymentStatus] = useState<"all" | PurchasePaymentStatus>("all");

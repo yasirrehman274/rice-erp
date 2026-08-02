@@ -1,14 +1,15 @@
 "use client";
 
 import SalePageActions from "@/components/sales/SalePageActions";
-import SaleTable from "@/components/sales/SaleTable";
+import SaleTable, { SaleTableSkeleton } from "@/components/sales/SaleTable";
 import { saleService } from "@/services/sale.service";
 import { useState, useEffect } from "react";
 import type { Sale } from "@/types/sale";
 
 export default function SalesPage() {
   const [sales, setSales] = useState<Sale[]>([]);
-  useEffect(() => { setSales(saleService.getAll()); }, []);
+  const [loading, setLoading] = useState(true);
+  useEffect(() => { let mounted = true; saleService.refresh().then((data) => { if (mounted) setSales(data); }).catch(() => { if (mounted) setSales(saleService.getAll()); }).finally(() => { if (mounted) setLoading(false); }); return () => { mounted = false; }; }, []);
   const totalAmount = sales.reduce((sum, s) => sum + s.grandTotal, 0);
   const totalReceived = sales.reduce((sum, s) => sum + s.receivedAmount, 0);
   const totalRemaining = sales.reduce((sum, s) => sum + s.remainingBalance, 0);
@@ -27,7 +28,7 @@ export default function SalesPage() {
       <MiniStat label="Total receivable" value={`Rs. ${new Intl.NumberFormat("en-PK").format(totalRemaining)}`} />
       <MiniStat label="Total orders" value={String(sales.length)} />
     </div>
-    <SaleTable initialSales={sales} />
+    {loading && sales.length === 0 ? <SaleTableSkeleton /> : <SaleTable initialSales={sales} />}
   </div>;
 }
 

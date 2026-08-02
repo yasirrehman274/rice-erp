@@ -1,23 +1,31 @@
 "use client";
 
-import { ChevronRight, Download, Plus } from "lucide-react";
+import { ChevronRight, Download } from "lucide-react";
+import Link from "next/link";
 import DashboardCards from "@/components/dashboard/DashboardCards";
 import RevenueChart from "@/components/dashboard/RevenueChart";
 import { warehouseService } from "@/services/warehouse.service";
-import { inventoryService } from "@/services/inventory.service";
+import { expenseService } from "@/services/expense.service";
 import { useState, useEffect } from "react";
 import type { Warehouse } from "@/types/warehouse";
+import type { Expense } from "@/types/expense";
+import { formatCurrency } from "@/lib/utils";
 
 const warehouseColors = ["bg-emerald-500", "bg-blue-500", "bg-amber-500", "bg-violet-500", "bg-rose-500", "bg-cyan-500"];
 
 export default function DashboardPage() {
   const [warehouses, setWarehouses] = useState<Warehouse[]>([]);
+  const [expenses, setExpenses] = useState<Expense[]>([]);
 
   useEffect(() => {
-    setWarehouses(warehouseService.getAll());
+    let mounted = true;
+    warehouseService.refresh().then((data) => { if (mounted) setWarehouses(data); }).catch(() => { if (mounted) setWarehouses(warehouseService.getAll()); });
+    expenseService.refresh().then((data) => { if (mounted) setExpenses(data); }).catch(() => { if (mounted) setExpenses(expenseService.getAll()); });
+    return () => { mounted = false; };
   }, []);
 
   const maxStock = Math.max(...warehouses.map((w) => w.totalStock), 1);
+  const recentExpenses = expenses.slice(0, 5);
 
   return <div className="space-y-6">
     <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
@@ -49,5 +57,35 @@ export default function DashboardPage() {
         </div>
       </section>
     </div>
+
+    <section className="rounded-2xl border border-slate-200 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-900">
+      <div className="flex items-center justify-between border-b border-slate-100 px-5 py-4 dark:border-slate-800">
+        <h2 className="font-semibold">Recent expenses</h2>
+        <Link href="/expenses" className="inline-flex items-center gap-1 text-sm font-semibold text-emerald-600 hover:text-emerald-500">View all<ChevronRight size={15} /></Link>
+      </div>
+      <div className="overflow-x-auto">
+        <table className="w-full text-left text-sm">
+          <thead className="bg-slate-50 text-xs uppercase tracking-wide text-slate-500 dark:bg-slate-800/40">
+            <tr>
+              <th className="px-5 py-3">Expense No</th>
+              <th className="px-4 py-3">Category</th>
+              <th className="px-4 py-3">Title</th>
+              <th className="px-4 py-3 text-right">Amount</th>
+              <th className="px-4 py-3">Status</th>
+            </tr>
+          </thead>
+          <tbody>
+            {recentExpenses.length === 0 && <tr><td colSpan={5} className="px-5 py-8 text-center text-sm text-slate-500">No expenses recorded yet.</td></tr>}
+            {recentExpenses.map((expense) => <tr key={expense.id} className="border-b border-slate-100 last:border-0 dark:border-slate-800">
+              <td className="px-5 py-3 font-medium">{expense.expenseNumber}</td>
+              <td className="px-4 py-3 text-slate-500">{expense.category}</td>
+              <td className="px-4 py-3 text-slate-500">{expense.title}</td>
+              <td className="px-4 py-3 text-right font-medium">{formatCurrency(expense.amount)}</td>
+              <td className="px-4 py-3"><span className={`rounded-full px-2 py-1 text-xs font-semibold ${expense.status === "paid" ? "bg-emerald-50 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-400" : expense.status === "pending" ? "bg-amber-50 text-amber-700 dark:bg-amber-500/10 dark:text-amber-400" : "bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400"}`}>{expense.status}</span></td>
+            </tr>)}
+          </tbody>
+        </table>
+      </div>
+    </section>
   </div>;
 }

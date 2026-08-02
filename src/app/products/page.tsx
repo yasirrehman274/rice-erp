@@ -1,15 +1,18 @@
 "use client";
 
 import ProductPageActions from "@/components/products/ProductPageActions";
-import ProductTable from "@/components/products/ProductTable";
+import ProductTable, { ProductTableSkeleton } from "@/components/products/ProductTable";
 import { productService } from "@/services/product.service";
 import { useState, useEffect } from "react";
 import type { Product } from "@/types/product";
 
 export default function ProductsPage() {
   const [products, setProducts] = useState<Product[]>([]);
+  const [loading, setLoading] = useState(true);
   useEffect(() => {
-    setProducts(productService.getAll());
+    let mounted = true;
+    productService.refresh().then((data) => { if (mounted) setProducts(data); }).catch(() => { if (mounted) setProducts(productService.getAll()); }).finally(() => { if (mounted) setLoading(false); });
+    return () => { mounted = false; };
   }, []);
   return (
     <div className="space-y-6">
@@ -43,7 +46,7 @@ export default function ProductsPage() {
           )}
         />
       </div>
-      <ProductTable initialProducts={products} />
+      {loading && products.length === 0 ? <ProductTableSkeleton /> : <ProductTable initialProducts={products} />}
     </div>
   );
 }

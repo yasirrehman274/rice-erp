@@ -9,7 +9,7 @@ import type { PurchaseHistoryEntry } from "@/types/purchase";
 
 export default function PurchaseHistoryPage() {
   const [history, setHistory] = useState<PurchaseHistoryEntry[]>([]);
-  useEffect(() => { setHistory(purchaseService.getPurchaseHistory()); }, []);
+  useEffect(() => { let mounted = true; purchaseService.refresh().then(() => { if (mounted) setHistory(purchaseService.getPurchaseHistory()); }).catch(() => { if (mounted) setHistory(purchaseService.getPurchaseHistory()); }); return () => { mounted = false; }; }, []);
 
   return <div>
     <Link href="/purchases" className="mb-4 inline-flex items-center gap-1 text-sm font-semibold text-slate-500 hover:text-emerald-600"><ChevronLeft size={17} />Back to purchases</Link>

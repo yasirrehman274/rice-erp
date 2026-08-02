@@ -5,6 +5,7 @@ import { warehouses } from "@/data/warehouses";
 import { inventoryItems } from "@/data/inventory";
 import { purchases } from "@/data/purchases";
 import { sales } from "@/data/sales";
+import { expenses } from "@/data/expenses";
 import { setItem, markSeeded, getItem } from "@/lib/storage";
 import type { InventoryItem } from "@/types/inventory";
 
@@ -16,6 +17,7 @@ const STORAGE_KEYS = {
   inventory: "inventory",
   purchases: "purchases",
   sales: "sales",
+  expenses: "expenses",
 } as const;
 
 export function seedAll(): void {
@@ -26,6 +28,7 @@ export function seedAll(): void {
   setItem(STORAGE_KEYS.inventory, inventoryItems);
   setItem(STORAGE_KEYS.purchases, purchases);
   setItem(STORAGE_KEYS.sales, sales);
+  setItem(STORAGE_KEYS.expenses, expenses);
   syncFromInventory();
   markSeeded();
 }

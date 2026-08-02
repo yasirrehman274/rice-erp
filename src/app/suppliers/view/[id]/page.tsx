@@ -3,25 +3,45 @@
 import { ChevronLeft, Pencil } from "lucide-react";
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import ErrorBanner from "@/components/ErrorBanner";
 import SupplierDetails from "@/components/suppliers/SupplierDetails";
 import { supplierService } from "@/services/supplier.service";
 import { useState, useEffect } from "react";
 import type { Supplier, SupplierPurchase } from "@/types/supplier";
 
 export default function SupplierViewPage({ params }: { params: Promise<{ id: string }> }) {
-  const [supplier, setSupplier] = useState<Supplier | undefined>();
+  const [supplier, setSupplier] = useState<Supplier | undefined | null>(undefined);
   const [purchases, setPurchases] = useState<SupplierPurchase[]>([]);
   const [id, setId] = useState("");
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    params.then(({ id: pid }) => {
+    let mounted = true;
+    params.then(async ({ id: pid }) => {
       setId(pid);
-      const s = supplierService.getById(pid);
-      setSupplier(s);
-      if (s) setPurchases(supplierService.getSupplierPurchases(s));
+      try {
+        const s = await supplierService.fetchById(pid);
+        if (mounted) {
+          setSupplier(s);
+          if (s) setPurchases(supplierService.getSupplierPurchases(s));
+        }
+      } catch (err) {
+        if (mounted) setError(err instanceof Error ? err.message : "Failed to load the supplier.");
+      }
     });
+    return () => {
+      mounted = false;
+    };
   }, [params]);
 
+  if (error) {
+    return (
+      <div>
+        <Link href="/suppliers" className="inline-flex items-center gap-1 text-sm font-semibold text-slate-500 hover:text-emerald-600"><ChevronLeft size={17} />Back to suppliers</Link>
+        <div className="mt-6"><ErrorBanner message={error} /></div>
+      </div>
+    );
+  }
   if (supplier === undefined) return <div className="grid min-h-60 place-items-center"><div className="h-8 w-8 animate-spin rounded-full border-4 border-emerald-600 border-t-transparent" /></div>;
   if (!supplier) notFound();
 

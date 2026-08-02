@@ -13,11 +13,24 @@ export default function PurchaseViewPage({ params }: { params: Promise<{ id: str
   const [payments, setPayments] = useState<PurchasePayment[]>([]);
 
   useEffect(() => {
-    params.then(({ id }) => {
-      const p = purchaseService.getById(id);
-      setPurchase(p);
-      if (p) setPayments(purchaseService.getPurchasePayments(p));
+    let mounted = true;
+    params.then(async ({ id }) => {
+      try {
+        const all = await purchaseService.refresh();
+        if (!mounted) return;
+        const p = all.find((item) => item.id === id);
+        setPurchase(p);
+        if (p) setPayments(purchaseService.getPurchasePayments(p));
+      } catch {
+        if (!mounted) return;
+        const p = purchaseService.getById(id);
+        setPurchase(p);
+        if (p) setPayments(purchaseService.getPurchasePayments(p));
+      }
     });
+    return () => {
+      mounted = false;
+    };
   }, [params]);
 
   if (purchase === undefined) return <div className="grid min-h-60 place-items-center"><div className="h-8 w-8 animate-spin rounded-full border-4 border-emerald-600 border-t-transparent" /></div>;

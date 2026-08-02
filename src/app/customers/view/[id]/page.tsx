@@ -5,6 +5,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import CustomerDetails from "@/components/customers/CustomerDetails";
 import { customerService } from "@/services/customer.service";
+import { saleService } from "@/services/sale.service";
 import { useState, useEffect } from "react";
 import type { Customer, CustomerOrder } from "@/types/customer";
 
@@ -14,12 +15,25 @@ export default function ViewCustomerPage({ params }: { params: Promise<{ id: str
   const [id, setId] = useState("");
 
   useEffect(() => {
-    params.then(({ id: pid }) => {
+    let mounted = true;
+    params.then(async ({ id: pid }) => {
       setId(pid);
-      const c = customerService.getById(pid);
-      setCustomer(c);
-      if (c) setOrders(customerService.getCustomerOrders(c));
+      try {
+        const [all] = await Promise.all([customerService.refresh(), saleService.refresh()]);
+        if (!mounted) return;
+        const c = all.find((item) => item.id === pid);
+        setCustomer(c);
+        if (c) setOrders(customerService.getCustomerOrders(c));
+      } catch {
+        if (!mounted) return;
+        const c = customerService.getById(pid);
+        setCustomer(c);
+        if (c) setOrders(customerService.getCustomerOrders(c));
+      }
     });
+    return () => {
+      mounted = false;
+    };
   }, [params]);
 
   if (customer === undefined) return <div className="grid min-h-60 place-items-center"><div className="h-8 w-8 animate-spin rounded-full border-4 border-emerald-600 border-t-transparent" /></div>;

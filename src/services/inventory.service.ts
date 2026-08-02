@@ -1,17 +1,87 @@
-import type { InventoryItem, StockLedgerEntry } from "@/types/inventory";
-import { getItem, setItem } from "@/lib/storage";
-import { ensureSeeded } from "@/lib/storage";
+import type { InventoryItem, StockLedgerEntry, StockAdjustmentValues, StockTransferValues } from "@/types/inventory";
+import { getItem, setItem, ensureSeeded } from "@/lib/storage";
 import { seedAll } from "@/utils/seed";
+import { apiRequest } from "@/lib/api";
+import { purchaseService } from "./purchase.service";
+import { saleService } from "./sale.service";
 
 const KEY = "inventory";
-const PRODUCTS_KEY = "products";
-const WAREHOUSES_KEY = "warehouses";
 
-function ensure(): void { ensureSeeded(seedAll); }
+let cache: InventoryItem[] | null = null;
+let hydrated = false;
+let inFlight: Promise<InventoryItem[]> | null = null;
 
-function getAll(): InventoryItem[] { ensure(); return getItem<InventoryItem>(KEY) ?? []; }
+function ensure(): void {
+  ensureSeeded(seedAll);
+  if (cache === null) cache = getItem<InventoryItem>(KEY) ?? [];
+  hydrate();
+}
 
-function getById(id: string): InventoryItem | undefined { return getAll().find((i) => i.id === id); }
+function persist(): void {
+  setItem(KEY, cache ?? []);
+}
+
+function hydrate(): void {
+  if (typeof window === "undefined" || hydrated) return;
+  hydrated = true;
+  void refresh().catch(() => {
+    hydrated = false;
+  });
+}
+
+function replaceRecord(record: InventoryItem): void {
+  cache = [...(cache ?? []).filter((i) => i.id !== record.id), record];
+  persist();
+}
+
+async function refresh(): Promise<InventoryItem[]> {
+  if (inFlight) return inFlight;
+  inFlight = doRefresh().finally(() => {
+    inFlight = null;
+  });
+  return inFlight;
+}
+
+async function doRefresh(): Promise<InventoryItem[]> {
+  let data = await apiRequest<InventoryItem[]>("/inventory");
+  if (data.length === 0) {
+    const local = getItem<InventoryItem>(KEY) ?? [];
+    if (local.length > 0) {
+      let migrated = 0;
+      for (const item of local) {
+        try {
+          await apiRequest<InventoryItem>("/inventory", { method: "POST", body: item });
+          migrated += 1;
+        } catch {
+          // Skip records that already exist on the server.
+        }
+      }
+      if (migrated > 0) data = await apiRequest<InventoryItem[]>("/inventory");
+    }
+  }
+  try {
+    await apiRequest("/inventory/recompute", { method: "POST" });
+    data = await apiRequest<InventoryItem[]>("/inventory");
+  } catch {
+    // Recompute is best-effort; cached values remain usable.
+  }
+  if (data.length > 0) {
+    cache = data;
+    persist();
+  } else {
+    cache = getItem<InventoryItem>(KEY) ?? [];
+  }
+  return cache;
+}
+
+function getAll(): InventoryItem[] {
+  ensure();
+  return cache ?? [];
+}
+
+function getById(id: string): InventoryItem | undefined {
+  return getAll().find((i) => i.id === id);
+}
 
 function getByProductAndWarehouse(productId: string, warehouseId: string): InventoryItem | undefined {
   return getAll().find((i) => i.productId === productId && i.warehouseId === warehouseId);
@@ -23,71 +93,6 @@ function getByProduct(productId: string): InventoryItem[] {
 
 function getByWarehouse(warehouseId: string): InventoryItem[] {
   return getAll().filter((i) => i.warehouseId === warehouseId);
-}
-
-function generateId(all: InventoryItem[]): string {
-  const nums = all.map((i) => parseInt(i.id.split("-")[1], 10)).filter((n) => !isNaN(n));
-  const next = nums.length > 0 ? Math.max(...nums) + 1 : 1;
-  return `inv-${String(next).padStart(3, "0")}`;
-}
-
-function syncProductStock(productId: string): void {
-  const products = getItem<{ id: string; currentStock: number; warehouseCount: number }>(PRODUCTS_KEY) ?? [];
-  const idx = products.findIndex((p) => p.id === productId);
-  if (idx === -1) return;
-  const items = getByProduct(productId);
-  const totalStock = items.reduce((sum, i) => sum + i.currentStock, 0);
-  const warehouseCount = items.filter((i) => i.currentStock > 0).length;
-  const next = [...products];
-  next[idx] = { ...next[idx], currentStock: totalStock, warehouseCount };
-  setItem(PRODUCTS_KEY, next);
-}
-
-function syncWarehouseStats(warehouseId: string): void {
-  const warehouses = getItem<{ id: string; occupiedCapacity: number; productCount: number; totalStock: number }>(WAREHOUSES_KEY) ?? [];
-  const idx = warehouses.findIndex((w) => w.id === warehouseId);
-  if (idx === -1) return;
-  const items = getByWarehouse(warehouseId);
-  const totalStock = items.reduce((sum, i) => sum + i.currentStock, 0);
-  const productCount = items.filter((i) => i.currentStock > 0).length;
-  const next = [...warehouses];
-  next[idx] = { ...next[idx], totalStock, productCount, occupiedCapacity: totalStock };
-  setItem(WAREHOUSES_KEY, next);
-}
-
-function addStock(productId: string, warehouseId: string, quantity: number, meta: { productName: string; riceCode: string; category: string; warehouseName: string; unit: string; minimumStock: number; purchaseRate?: number }): InventoryItem {
-  const all = getAll();
-  const existing = all.find((i) => i.productId === productId && i.warehouseId === warehouseId);
-  const now = new Date().toISOString().slice(0, 10);
-  let item: InventoryItem;
-  if (existing) {
-    const purchaseRate = meta.purchaseRate ?? existing.averageCostPerKG;
-    const oldCost = existing.averageCostPerKG * existing.currentStock;
-    const newCost = purchaseRate * quantity;
-    const avgCost = (existing.currentStock + quantity) > 0 ? (oldCost + newCost) / (existing.currentStock + quantity) : 0;
-    item = { ...existing, currentStock: existing.currentStock + quantity, availableStock: existing.currentStock + quantity - existing.reservedStock, averageCostPerKG: avgCost, updatedAt: now };
-    const idx = all.findIndex((i) => i.id === existing.id);
-    all[idx] = item;
-  } else {
-    item = { id: generateId(all), productId, productName: meta.productName, riceCode: meta.riceCode, category: meta.category, warehouseId, warehouseName: meta.warehouseName, currentStock: quantity, reservedStock: 0, availableStock: quantity, minimumStock: meta.minimumStock, unit: meta.unit, averageCostPerKG: meta.purchaseRate ?? 0, updatedAt: now };
-    all.push(item);
-  }
-  setItem(KEY, all);
-  syncProductStock(productId);
-  syncWarehouseStats(warehouseId);
-  return item;
-}
-
-function removeStock(productId: string, warehouseId: string, quantity: number): void {
-  const all = getAll();
-  const idx = all.findIndex((i) => i.productId === productId && i.warehouseId === warehouseId);
-  if (idx === -1) return;
-  const item = all[idx];
-  const newStock = Math.max(0, item.currentStock - quantity);
-  all[idx] = { ...item, currentStock: newStock, availableStock: newStock - item.reservedStock, updatedAt: new Date().toISOString().slice(0, 10) };
-  setItem(KEY, all);
-  syncProductStock(productId);
-  syncWarehouseStats(warehouseId);
 }
 
 function search(query: string): InventoryItem[] {
@@ -112,11 +117,65 @@ function getTotalStock(): number {
   return getAll().reduce((sum, i) => sum + i.currentStock, 0);
 }
 
+async function adjustStock(item: InventoryItem, values: StockAdjustmentValues): Promise<InventoryItem> {
+  ensure();
+  const quantity = Number(values.quantity);
+  const optimistic: InventoryItem = {
+    ...item,
+    currentStock: values.adjustmentType === "increase" ? item.currentStock + quantity : Math.max(0, item.currentStock - quantity),
+    availableStock: values.adjustmentType === "increase" ? item.availableStock + quantity : Math.max(0, item.availableStock - quantity),
+    updatedAt: new Date().toISOString().slice(0, 10),
+  };
+  replaceRecord(optimistic);
+  try {
+    const record = await apiRequest<InventoryItem>(`/inventory/${encodeURIComponent(item.id)}/adjust`, {
+      method: "POST",
+      body: { adjustmentType: values.adjustmentType, quantity, reason: values.reason, notes: values.notes },
+    });
+    replaceRecord(record);
+    return record;
+  } catch (error) {
+    replaceRecord(item);
+    throw error;
+  }
+}
+
+async function transferStock(item: InventoryItem, values: StockTransferValues): Promise<InventoryItem> {
+  ensure();
+  const quantity = Number(values.quantity);
+  const optimistic: InventoryItem = {
+    ...item,
+    currentStock: Math.max(0, item.currentStock - quantity),
+    availableStock: Math.max(0, item.availableStock - quantity),
+    updatedAt: new Date().toISOString().slice(0, 10),
+  };
+  replaceRecord(optimistic);
+  try {
+    const record = await apiRequest<InventoryItem>(`/inventory/${encodeURIComponent(item.id)}/transfer`, {
+      method: "POST",
+      body: { destinationWarehouseId: values.destinationWarehouseId, quantity, notes: values.notes },
+    });
+    replaceRecord(record);
+    try {
+      const dest = await apiRequest<InventoryItem[]>(
+        `/inventory?productId=${encodeURIComponent(item.productId)}&warehouseId=${encodeURIComponent(values.destinationWarehouseId)}`,
+      );
+      if (dest[0]) replaceRecord(dest[0]);
+    } catch {
+      // Best-effort refresh of the destination record.
+    }
+    return record;
+  } catch (error) {
+    replaceRecord(item);
+    throw error;
+  }
+}
+
 function getStockLedger(item: InventoryItem): StockLedgerEntry[] {
   type MiniPurchase = { id: string; purchaseNumber: string; purchaseDate: string; productId: string; warehouseId: string; quantity: number };
   type MiniSale = { id: string; saleNumber: string; saleDate: string; productId: string; warehouseId: string; quantity: number };
-  const purchases = getItem<MiniPurchase>("purchases") ?? [];
-  const sales = getItem<MiniSale>("sales") ?? [];
+  const purchases = purchaseService.getAll() as MiniPurchase[];
+  const sales = saleService.getAll() as MiniSale[];
   const entries: StockLedgerEntry[] = [];
   let balance = 0;
   const productPurchases = purchases.filter((p) => p.productId === item.productId && p.warehouseId === item.warehouseId).sort((a, b) => a.purchaseDate.localeCompare(b.purchaseDate));
@@ -144,14 +203,13 @@ export const inventoryService = {
   getByProductAndWarehouse,
   getByProduct,
   getByWarehouse,
-  addStock,
-  removeStock,
+  adjustStock,
+  transferStock,
   search,
   filter,
   count,
   getStockStatus,
   getStockLedger,
   getTotalStock,
-  syncProductStock,
-  syncWarehouseStats,
+  refresh,
 };

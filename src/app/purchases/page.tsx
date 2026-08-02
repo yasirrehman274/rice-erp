@@ -1,14 +1,15 @@
 "use client";
 
 import PurchasePageActions from "@/components/purchases/PurchasePageActions";
-import PurchaseTable from "@/components/purchases/PurchaseTable";
+import PurchaseTable, { PurchaseTableSkeleton } from "@/components/purchases/PurchaseTable";
 import { purchaseService } from "@/services/purchase.service";
 import { useState, useEffect } from "react";
 import type { Purchase } from "@/types/purchase";
 
 export default function PurchasesPage() {
   const [purchases, setPurchases] = useState<Purchase[]>([]);
-  useEffect(() => { setPurchases(purchaseService.getAll()); }, []);
+  const [loading, setLoading] = useState(true);
+  useEffect(() => { let mounted = true; purchaseService.refresh().then((data) => { if (mounted) setPurchases(data); }).catch(() => { if (mounted) setPurchases(purchaseService.getAll()); }).finally(() => { if (mounted) setLoading(false); }); return () => { mounted = false; }; }, []);
   const totalAmount = purchases.reduce((sum, p) => sum + p.grandTotal, 0);
   const totalPaid = purchases.reduce((sum, p) => sum + p.paidAmount, 0);
   const totalRemaining = purchases.reduce((sum, p) => sum + p.remainingBalance, 0);
@@ -27,7 +28,7 @@ export default function PurchasesPage() {
       <MiniStat label="Total remaining" value={`Rs. ${new Intl.NumberFormat("en-PK").format(totalRemaining)}`} />
       <MiniStat label="Total orders" value={String(purchases.length)} />
     </div>
-    <PurchaseTable initialPurchases={purchases} />
+    {loading && purchases.length === 0 ? <PurchaseTableSkeleton /> : <PurchaseTable initialPurchases={purchases} />}
   </div>;
 }
 

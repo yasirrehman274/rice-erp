@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowUpRight, Download, FileText, Package, ShoppingCart, TrendingUp, Truck, Users } from "lucide-react";
+import { ArrowUpRight, Download, FileText, Package, Receipt, ShoppingCart, TrendingUp, Truck, Users } from "lucide-react";
 import Link from "next/link";
 import { purchaseService } from "@/services/purchase.service";
 import { saleService } from "@/services/sale.service";
@@ -8,34 +8,81 @@ import { inventoryService } from "@/services/inventory.service";
 import { supplierService } from "@/services/supplier.service";
 import { customerService } from "@/services/customer.service";
 import { warehouseService } from "@/services/warehouse.service";
+import { expenseService } from "@/services/expense.service";
 import { useState, useEffect } from "react";
 import type { Purchase } from "@/types/purchase";
 import type { Sale } from "@/types/sale";
+import type { InventoryItem } from "@/types/inventory";
+import type { Supplier } from "@/types/supplier";
+import type { Customer } from "@/types/customer";
+import type { Expense } from "@/types/expense";
 
 export default function ReportsPage() {
   const [purchases, setPurchases] = useState<Purchase[]>([]);
   const [sales, setSales] = useState<Sale[]>([]);
+  const [expenses, setExpenses] = useState<Expense[]>([]);
   const [activeWarehouses, setActiveWarehouses] = useState<{ id: string; name: string; code: string; occupiedCapacity: number; capacity: number; productCount: number; totalStock: number }[]>([]);
+  const [inventoryItems, setInventoryItems] = useState<InventoryItem[]>([]);
+  const [suppliers, setSuppliers] = useState<Supplier[]>([]);
+  const [customers, setCustomers] = useState<Customer[]>([]);
 
   useEffect(() => {
-    setPurchases(purchaseService.getAll());
-    setSales(saleService.getAll());
-    setActiveWarehouses(warehouseService.filter((w) => w.status === "active"));
+    let mounted = true;
+    Promise.all([
+      purchaseService.refresh(),
+      saleService.refresh(),
+      expenseService.refresh(),
+      warehouseService.refresh(),
+      inventoryService.refresh(),
+      supplierService.refresh(),
+      customerService.refresh(),
+    ])
+      .then(() => {
+        if (mounted) {
+          setPurchases(purchaseService.getAll());
+          setSales(saleService.getAll());
+          setExpenses(expenseService.getAll());
+          setActiveWarehouses(warehouseService.filter((w) => w.status === "active"));
+          setInventoryItems(inventoryService.getAll());
+          setSuppliers(supplierService.getAll());
+          setCustomers(customerService.getAll());
+        }
+      })
+      .catch(() => {
+        if (mounted) {
+          setPurchases(purchaseService.getAll());
+          setSales(saleService.getAll());
+          setExpenses(expenseService.getAll());
+          setActiveWarehouses(warehouseService.filter((w) => w.status === "active"));
+          setInventoryItems(inventoryService.getAll());
+          setSuppliers(supplierService.getAll());
+          setCustomers(customerService.getAll());
+        }
+      });
+    return () => {
+      mounted = false;
+    };
   }, []);
 
   const totalPurchases = purchases.reduce((sum, p) => sum + p.grandTotal, 0);
   const totalSales = sales.reduce((sum, s) => sum + s.grandTotal, 0);
+  const totalExpenses = expenseService.total(expenses);
   const profit = totalSales - totalPurchases;
-  const inventoryItems = inventoryService.getAll();
+  const netProfit = profit - totalExpenses;
   const totalInventory = inventoryItems.reduce((sum, item) => sum + item.currentStock, 0);
   const lowStockItems = inventoryItems.filter((item) => item.currentStock <= item.minimumStock).length;
-  const suppliers = supplierService.getAll();
-  const customers = customerService.getAll();
+
+  const expenseCategories = expenseService.byCategory(expenses);
+  const expenseMonths = expenseService.byMonth(expenses);
+  const monthLabels: Record<string, string> = {
+    "2026-01": "Jan", "2026-02": "Feb", "2026-03": "Mar", "2026-04": "Apr", "2026-05": "May", "2026-06": "Jun", "2026-07": "Jul", "2026-08": "Aug", "2026-09": "Sep", "2026-10": "Oct", "2026-11": "Nov", "2026-12": "Dec",
+  };
 
   const reports = [
     { title: "Purchase summary", description: "Total purchase orders, amounts, and trends.", value: `Rs. ${new Intl.NumberFormat("en-PK").format(totalPurchases)}`, change: "+12.4%", positive: true, icon: ShoppingCart, href: "/purchases" },
     { title: "Sales summary", description: "Total sales orders, amounts, and trends.", value: `Rs. ${new Intl.NumberFormat("en-PK").format(totalSales)}`, change: "+18.2%", positive: true, icon: TrendingUp, href: "/sales" },
-    { title: "Profit & loss", description: "Net profit from all trading activities.", value: `Rs. ${new Intl.NumberFormat("en-PK").format(profit)}`, change: profit > 0 ? "+8.7%" : "-2.1%", positive: profit > 0, icon: ArrowUpRight, href: "/reports/profit-loss" },
+    { title: "Expense summary", description: "Total business expenses across categories.", value: `Rs. ${new Intl.NumberFormat("en-PK").format(totalExpenses)}`, change: `${expenses.filter((e) => e.status === "pending").length} pending`, positive: true, icon: Receipt, href: "/expenses" },
+    { title: "Profit & loss", description: "Net profit after purchases and expenses.", value: `Rs. ${new Intl.NumberFormat("en-PK").format(netProfit)}`, change: netProfit > 0 ? "+8.7%" : "-2.1%", positive: netProfit > 0, icon: ArrowUpRight, href: "/reports/profit-loss" },
     { title: "Inventory status", description: "Current stock levels across all warehouses.", value: `${totalInventory.toLocaleString()} bags`, change: lowStockItems > 0 ? `${lowStockItems} low` : "All good", positive: lowStockItems === 0, icon: Package, href: "/inventory" },
     { title: "Supplier ledger", description: "Outstanding payables to suppliers.", value: `Rs. ${new Intl.NumberFormat("en-PK").format(suppliers.reduce((sum, s) => sum + s.currentBalance, 0))}`, change: `${suppliers.filter((s) => s.status === "active").length} active`, positive: true, icon: Truck, href: "/suppliers" },
     { title: "Customer ledger", description: "Outstanding receivables from customers.", value: `Rs. ${new Intl.NumberFormat("en-PK").format(customers.reduce((sum, c) => sum + c.currentBalance, 0))}`, change: `${customers.filter((c) => c.status === "active").length} active`, positive: true, icon: Users, href: "/customers" },
@@ -43,6 +90,7 @@ export default function ReportsPage() {
 
   const recentPurchases = purchases.slice(0, 5);
   const recentSales = sales.slice(0, 5);
+  const recentExpenses = expenses.slice(0, 5);
 
   return <div className="space-y-6">
     <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
@@ -118,6 +166,66 @@ export default function ReportsPage() {
         </div>
       </section>
     </div>
+
+    <section className="rounded-2xl border border-slate-200 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-900">
+      <div className="border-b border-slate-100 px-5 py-4 dark:border-slate-800"><h2 className="font-semibold">Recent expenses</h2></div>
+      <div className="overflow-x-auto">
+        <table className="w-full text-left text-sm">
+          <thead className="bg-slate-50 text-xs uppercase tracking-wide text-slate-500 dark:bg-slate-800/40">
+            <tr>
+              <th className="px-5 py-3">Expense No</th>
+              <th className="px-4 py-3">Category</th>
+              <th className="px-4 py-3">Title</th>
+              <th className="px-4 py-3 text-right">Amount</th>
+              <th className="px-4 py-3">Status</th>
+            </tr>
+          </thead>
+          <tbody>
+            {recentExpenses.map((expense) => <tr key={expense.id} className="border-b border-slate-100 last:border-0 dark:border-slate-800">
+              <td className="px-5 py-3 font-medium">{expense.expenseNumber}</td>
+              <td className="px-4 py-3 text-slate-500">{expense.category}</td>
+              <td className="px-4 py-3 text-slate-500">{expense.title}</td>
+              <td className="px-4 py-3 text-right">Rs. {new Intl.NumberFormat("en-PK").format(expense.amount)}</td>
+              <td className="px-4 py-3"><span className={`rounded-full px-2 py-1 text-xs font-semibold ${expense.status === "paid" ? "bg-emerald-50 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-400" : expense.status === "pending" ? "bg-amber-50 text-amber-700 dark:bg-amber-500/10 dark:text-amber-400" : "bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400"}`}>{expense.status}</span></td>
+            </tr>)}
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900 sm:p-6">
+      <h2 className="font-semibold">Expense analytics</h2>
+      <div className="mt-5 grid gap-8 lg:grid-cols-2">
+        <div>
+          <h3 className="text-sm font-semibold">Expenses by category</h3>
+          <div className="mt-4 space-y-3">
+            {expenseCategories.length === 0 && <p className="text-sm text-slate-500">No expenses recorded yet.</p>}
+            {expenseCategories.slice(0, 8).map((item) => {
+              const maxTotal = expenseCategories[0]?.total ?? 1;
+              const percentage = Math.min((item.total / maxTotal) * 100, 100);
+              return <div key={item.category}>
+                <div className="flex items-center justify-between text-sm"><span className="font-medium">{item.category}</span><span className="text-slate-500">Rs. {new Intl.NumberFormat("en-PK").format(item.total)}</span></div>
+                <div className="mt-1.5 h-2 overflow-hidden rounded-full bg-slate-100 dark:bg-slate-800"><div className="h-full rounded-full bg-emerald-500" style={{ width: `${percentage}%` }} /></div>
+              </div>;
+            })}
+          </div>
+        </div>
+        <div>
+          <h3 className="text-sm font-semibold">Expenses by month</h3>
+          <div className="mt-4 space-y-3">
+            {expenseMonths.length === 0 && <p className="text-sm text-slate-500">No expenses recorded yet.</p>}
+            {expenseMonths.map((item) => {
+              const allMax = Math.max(...expenseMonths.map((m) => m.total), 1);
+              const percentage = Math.min((item.total / allMax) * 100, 100);
+              return <div key={item.month}>
+                <div className="flex items-center justify-between text-sm"><span className="font-medium">{monthLabels[item.month] ?? item.month} {item.month.slice(0, 4)}</span><span className="text-slate-500">Rs. {new Intl.NumberFormat("en-PK").format(item.total)}</span></div>
+                <div className="mt-1.5 h-2 overflow-hidden rounded-full bg-slate-100 dark:bg-slate-800"><div className="h-full rounded-full bg-amber-500" style={{ width: `${percentage}%` }} /></div>
+              </div>;
+            })}
+          </div>
+        </div>
+      </div>
+    </section>
 
     <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900 sm:p-6">
       <h2 className="font-semibold">Warehouse overview</h2>

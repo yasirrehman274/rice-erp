@@ -2,7 +2,6 @@
 
 import { ChevronLeft, DollarSign } from "lucide-react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { useState, useEffect } from "react";
 import { purchaseService } from "@/services/purchase.service";
 import { formatCurrency, formatDate } from "@/lib/utils";
@@ -10,19 +9,31 @@ import PurchasePaymentDialog from "@/components/purchases/PurchasePaymentDialog"
 import type { Purchase, PurchasePayment } from "@/types/purchase";
 
 export default function PurchasePaymentsPage({ params }: { params: Promise<{ id: string }> }) {
-  const router = useRouter();
   const [purchaseId, setPurchaseId] = useState("");
   const [purchase, setPurchase] = useState<Purchase | undefined>();
   const [payments, setPayments] = useState<PurchasePayment[]>([]);
   const [dialogOpen, setDialogOpen] = useState(false);
 
   useEffect(() => {
-    params.then(({ id }) => {
+    let mounted = true;
+    params.then(async ({ id }) => {
       setPurchaseId(id);
-      const p = purchaseService.getById(id);
-      setPurchase(p);
-      if (p) setPayments(purchaseService.getPurchasePayments(p));
+      try {
+        const all = await purchaseService.refresh();
+        if (!mounted) return;
+        const p = all.find((item) => item.id === id);
+        setPurchase(p);
+        if (p) setPayments(purchaseService.getPurchasePayments(p));
+      } catch {
+        if (!mounted) return;
+        const p = purchaseService.getById(id);
+        setPurchase(p);
+        if (p) setPayments(purchaseService.getPurchasePayments(p));
+      }
     });
+    return () => {
+      mounted = false;
+    };
   }, [params]);
 
   if (!purchase) return <div className="grid min-h-60 place-items-center"><div className="h-8 w-8 animate-spin rounded-full border-4 border-emerald-600 border-t-transparent" /></div>;

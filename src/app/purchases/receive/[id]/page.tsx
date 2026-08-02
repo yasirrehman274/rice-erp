@@ -17,10 +17,19 @@ export default function ReceivePurchasePage({ params }: { params: Promise<{ id: 
   const [received, setReceived] = useState(false);
 
   useEffect(() => {
-    params.then(({ id }) => {
+    let mounted = true;
+    params.then(async ({ id }) => {
       setPurchaseId(id);
-      setPurchase(purchaseService.getById(id));
+      try {
+        const all = await purchaseService.refresh();
+        if (mounted) setPurchase(all.find((item) => item.id === id));
+      } catch {
+        if (mounted) setPurchase(purchaseService.getById(id));
+      }
     });
+    return () => {
+      mounted = false;
+    };
   }, [params]);
 
   if (!purchase) return <div className="grid min-h-60 place-items-center"><div className="h-8 w-8 animate-spin rounded-full border-4 border-emerald-600 border-t-transparent" /></div>;

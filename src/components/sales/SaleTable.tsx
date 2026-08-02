@@ -2,7 +2,7 @@
 
 import { ChevronsUpDown, Eye, Pencil, Printer, Search, Trash2, Truck } from "lucide-react";
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { formatCurrency, formatDate } from "@/lib/utils";
 import type { Sale, SaleStatus, SalePaymentStatus } from "@/types/sale";
 import DeleteSaleDialog from "./DeleteSaleDialog";
@@ -19,7 +19,11 @@ export function SaleTableSkeleton() {
 
 export default function SaleTable({ initialSales }: { initialSales: Sale[] }) {
   const [sales, setSales] = useState<Sale[]>(initialSales);
-  useEffect(() => { setSales(saleService.getAll()); }, []);
+  const [prevInitial, setPrevInitial] = useState(initialSales);
+  if (prevInitial !== initialSales) {
+    setPrevInitial(initialSales);
+    setSales(initialSales);
+  }
   const [query, setQuery] = useState("");
   const [status, setStatus] = useState<"all" | SaleStatus>("all");
   const [paymentStatus, setPaymentStatus] = useState<"all" | SalePaymentStatus>("all");

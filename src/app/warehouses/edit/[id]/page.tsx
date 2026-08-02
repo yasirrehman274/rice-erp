@@ -3,22 +3,41 @@
 import { ChevronLeft } from "lucide-react";
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import ErrorBanner from "@/components/ErrorBanner";
 import WarehouseForm from "@/components/warehouses/WarehouseForm";
 import { warehouseService } from "@/services/warehouse.service";
 import { useState, useEffect } from "react";
 import type { Warehouse } from "@/types/warehouse";
 
 export default function EditWarehousePage({ params }: { params: Promise<{ id: string }> }) {
-  const [warehouse, setWarehouse] = useState<Warehouse | undefined>();
+  const [warehouse, setWarehouse] = useState<Warehouse | undefined | null>(undefined);
   const [id, setId] = useState("");
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    params.then(({ id: pid }) => {
+    let mounted = true;
+    params.then(async ({ id: pid }) => {
       setId(pid);
-      setWarehouse(warehouseService.getById(pid));
+      try {
+        const w = await warehouseService.fetchById(pid);
+        if (mounted) setWarehouse(w);
+      } catch (err) {
+        if (mounted) setError(err instanceof Error ? err.message : "Failed to load the warehouse.");
+      }
     });
+    return () => {
+      mounted = false;
+    };
   }, [params]);
 
+  if (error) {
+    return (
+      <div className="mx-auto max-w-5xl">
+        <Link href="/warehouses" className="inline-flex items-center gap-1 text-sm font-semibold text-slate-500 hover:text-emerald-600"><ChevronLeft size={17} />Back to warehouses</Link>
+        <div className="mt-6"><ErrorBanner message={error} /></div>
+      </div>
+    );
+  }
   if (warehouse === undefined) return <div className="grid min-h-60 place-items-center"><div className="h-8 w-8 animate-spin rounded-full border-4 border-emerald-600 border-t-transparent" /></div>;
   if (!warehouse) notFound();
 

@@ -4,14 +4,23 @@ import { ArrowLeft } from "lucide-react";
 import Link from "next/link";
 import { purchaseService } from "@/services/purchase.service";
 import { saleService } from "@/services/sale.service";
+import { expenseService } from "@/services/expense.service";
 import { useState, useEffect } from "react";
 import type { Purchase } from "@/types/purchase";
 import type { Sale } from "@/types/sale";
+import type { Expense } from "@/types/expense";
 
 export default function ProfitLossPage() {
   const [purchases, setPurchases] = useState<Purchase[]>([]);
   const [sales, setSales] = useState<Sale[]>([]);
-  useEffect(() => { setPurchases(purchaseService.getAll()); setSales(saleService.getAll()); }, []);
+  const [expenses, setExpenses] = useState<Expense[]>([]);
+  useEffect(() => {
+    let mounted = true;
+    Promise.all([purchaseService.refresh(), saleService.refresh(), expenseService.refresh()])
+      .then(() => { if (mounted) { setPurchases(purchaseService.getAll()); setSales(saleService.getAll()); setExpenses(expenseService.getAll()); } })
+      .catch(() => { if (mounted) { setPurchases(purchaseService.getAll()); setSales(saleService.getAll()); setExpenses(expenseService.getAll()); } });
+    return () => { mounted = false; };
+  }, []);
 
   const totalSales = sales.reduce((sum, s) => sum + s.grandTotal, 0);
   const totalPurchases = purchases.reduce((sum, p) => sum + p.grandTotal, 0);
@@ -25,7 +34,8 @@ export default function ProfitLossPage() {
   const netPurchases = totalPurchases - totalPurchaseDiscount;
   const grossProfit = netSales - netPurchases;
   const totalExpenses = totalTransportOut + totalOtherOut;
-  const netProfit = grossProfit - totalExpenses;
+  const expenseTotal = expenseService.total(expenses);
+  const netProfit = grossProfit - totalExpenses - expenseTotal;
 
   return <div className="mx-auto max-w-4xl space-y-6">
     <Link href="/reports" className="inline-flex items-center gap-1 text-sm font-semibold text-slate-500 hover:text-emerald-600"><ArrowLeft size={17} />Back to reports</Link>
@@ -56,7 +66,8 @@ export default function ProfitLossPage() {
       <div className="mt-4 space-y-3">
         <Row label="Transport (outbound)" value={totalTransportOut} />
         <Row label="Other charges (outbound)" value={totalOtherOut} />
-        <div className="border-t border-slate-200 pt-3 dark:border-slate-700"><Row label="Total expenses" value={totalExpenses} bold /></div>
+        <Row label="Operating expenses" value={expenseTotal} negative />
+        <div className="border-t border-slate-200 pt-3 dark:border-slate-700"><Row label="Total expenses" value={totalExpenses + expenseTotal} bold /></div>
       </div>
     </section>
 

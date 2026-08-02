@@ -2,7 +2,6 @@
 
 import { ChevronLeft, DollarSign } from "lucide-react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { useState, useEffect } from "react";
 import { saleService } from "@/services/sale.service";
 import { formatCurrency, formatDate } from "@/lib/utils";
@@ -10,19 +9,31 @@ import SalePaymentDialog from "@/components/sales/SalePaymentDialog";
 import type { Sale, SalePayment } from "@/types/sale";
 
 export default function SalePaymentsPage({ params }: { params: Promise<{ id: string }> }) {
-  const router = useRouter();
   const [saleId, setSaleId] = useState("");
   const [sale, setSale] = useState<Sale | undefined>();
   const [payments, setPayments] = useState<SalePayment[]>([]);
   const [dialogOpen, setDialogOpen] = useState(false);
 
   useEffect(() => {
-    params.then(({ id }) => {
+    let mounted = true;
+    params.then(async ({ id }) => {
       setSaleId(id);
-      const s = saleService.getById(id);
-      setSale(s);
-      if (s) setPayments(saleService.getSalePayments(s));
+      try {
+        const all = await saleService.refresh();
+        if (!mounted) return;
+        const s = all.find((item) => item.id === id);
+        setSale(s);
+        if (s) setPayments(saleService.getSalePayments(s));
+      } catch {
+        if (!mounted) return;
+        const s = saleService.getById(id);
+        setSale(s);
+        if (s) setPayments(saleService.getSalePayments(s));
+      }
     });
+    return () => {
+      mounted = false;
+    };
   }, [params]);
 
   if (!sale) return <div className="grid min-h-60 place-items-center"><div className="h-8 w-8 animate-spin rounded-full border-4 border-emerald-600 border-t-transparent" /></div>;

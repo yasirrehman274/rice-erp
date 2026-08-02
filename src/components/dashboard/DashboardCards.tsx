@@ -1,11 +1,12 @@
 "use client";
 
-import { Boxes, CircleDollarSign, ShoppingCart, WalletCards } from "lucide-react";
+import { Boxes, CircleDollarSign, Receipt, ShoppingCart, WalletCards } from "lucide-react";
 import StatCard from "./StatCard";
 import { inventoryService } from "@/services/inventory.service";
 import { purchaseService } from "@/services/purchase.service";
 import { saleService } from "@/services/sale.service";
 import { supplierService } from "@/services/supplier.service";
+import { expenseService } from "@/services/expense.service";
 import { useState, useEffect } from "react";
 import type { LucideIcon } from "lucide-react";
 
@@ -16,23 +17,32 @@ function getCards(): Card[] {
   const totalSales = saleService.getAll().reduce((sum, s) => sum + s.grandTotal, 0);
   const totalPurchases = purchaseService.getAll().reduce((sum, p) => sum + p.grandTotal, 0);
   const outstanding = supplierService.getAll().reduce((sum, s) => sum + s.currentBalance, 0);
+  const totalExpenses = expenseService.total(expenseService.getAll());
   return [
     { title: "Total stock", value: `${totalStock.toLocaleString()} bags`, detail: "across all warehouses", change: "", positive: true, icon: Boxes, tone: "bg-emerald-100 text-emerald-600 dark:bg-emerald-500/15" },
     { title: "Total sales", value: `Rs. ${totalSales >= 1_000_000 ? `${(totalSales / 1_000_000).toFixed(1)}M` : new Intl.NumberFormat("en-PK").format(totalSales)}`, detail: "lifetime", change: "", positive: true, icon: CircleDollarSign, tone: "bg-blue-100 text-blue-600 dark:bg-blue-500/15" },
     { title: "Total purchases", value: `Rs. ${totalPurchases >= 1_000_000 ? `${(totalPurchases / 1_000_000).toFixed(1)}M` : new Intl.NumberFormat("en-PK").format(totalPurchases)}`, detail: "lifetime", change: "", positive: true, icon: ShoppingCart, tone: "bg-amber-100 text-amber-600 dark:bg-amber-500/15" },
+    { title: "Total expenses", value: `Rs. ${totalExpenses >= 1_000_000 ? `${(totalExpenses / 1_000_000).toFixed(1)}M` : new Intl.NumberFormat("en-PK").format(totalExpenses)}`, detail: "non-cancelled", change: "", positive: true, icon: Receipt, tone: "bg-rose-100 text-rose-600 dark:bg-rose-500/15" },
     { title: "Outstanding", value: `Rs. ${new Intl.NumberFormat("en-PK").format(outstanding)}`, detail: "to suppliers", change: "", positive: outstanding === 0, icon: WalletCards, tone: "bg-violet-100 text-violet-600 dark:bg-violet-500/15" },
   ];
 }
 
-const PLACEHOLDER: Card[] = [
+const EMPTY_CARDS: Card[] = [
   { title: "Total stock", value: "—", detail: "across all warehouses", change: "", positive: true, icon: Boxes, tone: "bg-emerald-100 text-emerald-600 dark:bg-emerald-500/15" },
   { title: "Total sales", value: "—", detail: "lifetime", change: "", positive: true, icon: CircleDollarSign, tone: "bg-blue-100 text-blue-600 dark:bg-blue-500/15" },
   { title: "Total purchases", value: "—", detail: "lifetime", change: "", positive: true, icon: ShoppingCart, tone: "bg-amber-100 text-amber-600 dark:bg-amber-500/15" },
+  { title: "Total expenses", value: "—", detail: "non-cancelled", change: "", positive: true, icon: Receipt, tone: "bg-rose-100 text-rose-600 dark:bg-rose-500/15" },
   { title: "Outstanding", value: "—", detail: "to suppliers", change: "", positive: true, icon: WalletCards, tone: "bg-violet-100 text-violet-600 dark:bg-violet-500/15" },
 ];
 
 export default function DashboardCards() {
-  const [cards, setCards] = useState<Card[]>(PLACEHOLDER);
-  useEffect(() => { setCards(getCards()); }, []);
-  return <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">{cards.map((card) => <StatCard key={card.title} {...card} />)}</section>;
+  const [cards, setCards] = useState<Card[]>(EMPTY_CARDS);
+  useEffect(() => {
+    let mounted = true;
+    Promise.all([inventoryService.refresh(), saleService.refresh(), purchaseService.refresh(), supplierService.refresh(), expenseService.refresh()])
+      .then(() => { if (mounted) setCards(getCards()); })
+      .catch(() => { if (mounted) setCards(getCards()); });
+    return () => { mounted = false; };
+  }, []);
+  return <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">{cards.map((card) => <StatCard key={card.title} {...card} />)}</section>;
 }

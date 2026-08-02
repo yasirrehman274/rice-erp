@@ -2,7 +2,7 @@
 
 import { ChevronsUpDown, Eye, FileText, Pencil, Search, Trash2 } from "lucide-react";
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { formatCurrency, formatDate } from "@/lib/utils";
 import type { Supplier, SupplierStatus } from "@/types/supplier";
 import DeleteSupplierDialog from "./DeleteSupplierDialog";
@@ -12,13 +12,136 @@ import SupplierCard from "./SupplierCard";
 const pageSize = 8;
 type SortKey = "name" | "city" | "currentBalance" | "createdAt";
 
-export function SupplierTableSkeleton() { return <div className="space-y-3 p-5">{Array.from({ length: 6 }, (_, index) => <div key={index} className="h-14 animate-pulse rounded-xl bg-slate-100 dark:bg-slate-800" />)}</div>; }
+export function SupplierTableSkeleton() {
+  return <div className="space-y-3 p-5">{Array.from({ length: 6 }, (_, index) => <div key={index} className="h-14 animate-pulse rounded-xl bg-slate-100 dark:bg-slate-800" />)}</div>;
+}
 
 export default function SupplierTable({ initialSuppliers }: { initialSuppliers: Supplier[] }) {
-  const [suppliers, setSuppliers] = useState<Supplier[]>(initialSuppliers); useEffect(() => { setSuppliers(supplierService.getAll()); }, []); const [query, setQuery] = useState(""); const [status, setStatus] = useState<"all" | SupplierStatus>("all"); const [sort, setSort] = useState<SortKey>("createdAt"); const [ascending, setAscending] = useState(false); const [page, setPage] = useState(1); const [deleting, setDeleting] = useState<Supplier | null>(null);
-  const filtered = useMemo(() => suppliers.filter((supplier) => (status === "all" || supplier.status === status) && `${supplier.name} ${supplier.contactPerson} ${supplier.phone} ${supplier.city}`.toLowerCase().includes(query.toLowerCase())).sort((a, b) => { const left = a[sort]; const right = b[sort]; const comparison = typeof left === "number" ? left - (right as number) : String(left).localeCompare(String(right)); return ascending ? comparison : -comparison; }), [suppliers, query, status, sort, ascending]);
-  const pageCount = Math.max(1, Math.ceil(filtered.length / pageSize)); const safePage = Math.min(page, pageCount); const visible = filtered.slice((safePage - 1) * pageSize, safePage * pageSize);
-  function changeSort(key: SortKey) { if (sort === key) setAscending(!ascending); else { setSort(key); setAscending(true); } }
-  function resetFilters() { setQuery(""); setStatus("all"); setPage(1); }
-  return <><div className="rounded-2xl border border-slate-200 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-900"><div className="flex flex-col gap-3 border-b border-slate-100 p-4 dark:border-slate-800 sm:flex-row sm:items-center sm:justify-between"><div className="relative w-full sm:max-w-sm"><Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={18} /><input value={query} onChange={(event) => { setQuery(event.target.value); setPage(1); }} placeholder="Search suppliers..." className="h-10 w-full rounded-xl border border-slate-200 bg-slate-50 pl-10 pr-3 text-sm outline-none focus:border-emerald-500 focus:ring-4 focus:ring-emerald-500/10 dark:border-slate-700 dark:bg-slate-800" /></div><select value={status} onChange={(event) => { setStatus(event.target.value as "all" | SupplierStatus); setPage(1); }} className="h-10 rounded-xl border border-slate-200 bg-white px-3 text-sm outline-none focus:border-emerald-500 dark:border-slate-700 dark:bg-slate-800"><option value="all">All statuses</option><option value="active">Active</option><option value="inactive">Inactive</option></select></div>{visible.length === 0 ? <div className="grid min-h-80 place-items-center p-8 text-center"><div><Search className="mx-auto text-slate-300" size={38} /><h2 className="mt-4 font-semibold">No suppliers found</h2><p className="mt-1 text-sm text-slate-500">Try adjusting your search or filter.</p><button onClick={resetFilters} className="mt-4 text-sm font-semibold text-emerald-600">Clear filters</button></div></div> : <><div className="hidden overflow-x-auto lg:block"><table className="w-full min-w-[1100px] text-left text-sm"><thead className="bg-slate-50 text-xs uppercase tracking-wide text-slate-500 dark:bg-slate-800/40"><tr>{[["Supplier name", "name"], ["Contact person", null], ["Phone number", null], ["City", "city"], ["Address", null], ["Current balance", "currentBalance"], ["Status", null], ["Created date", "createdAt"]].map(([label, key]) => <th key={label as string} className="px-4 py-3 first:pl-6">{key ? <button onClick={() => changeSort(key as SortKey)} className="inline-flex items-center gap-1 font-semibold hover:text-slate-800 dark:hover:text-white">{label}<ChevronsUpDown size={14} /></button> : label}</th>)}<th className="px-4 py-3 pr-6">Actions</th></tr></thead><tbody>{visible.map((supplier) => <tr key={supplier.id} className="border-t border-slate-100 dark:border-slate-800"><td className="px-4 py-4 pl-6"><Link href={`/suppliers/view/${supplier.id}`} className="font-semibold hover:text-emerald-600">{supplier.name}</Link></td><td className="px-4 py-4">{supplier.contactPerson}</td><td className="px-4 py-4 text-slate-500">{supplier.phone}</td><td className="px-4 py-4">{supplier.city}</td><td className="max-w-44 truncate px-4 py-4 text-slate-500">{supplier.address}</td><td className="px-4 py-4 font-semibold">{formatCurrency(supplier.currentBalance)}</td><td className="px-4 py-4"><span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${supplier.status === "active" ? "bg-emerald-50 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-400" : "bg-slate-100 text-slate-600 dark:bg-slate-800"}`}>{supplier.status}</span></td><td className="px-4 py-4 text-slate-500">{formatDate(supplier.createdAt)}</td><td className="px-4 py-4 pr-6"><div className="flex items-center gap-1"><Link aria-label={`View ${supplier.name}`} href={`/suppliers/view/${supplier.id}`} className="rounded-lg p-2 text-slate-500 hover:bg-emerald-50 hover:text-emerald-600"><Eye size={16} /></Link><Link aria-label={`Edit ${supplier.name}`} href={`/suppliers/edit/${supplier.id}`} className="rounded-lg p-2 text-slate-500 hover:bg-blue-50 hover:text-blue-600"><Pencil size={16} /></Link><Link aria-label={`View ledger for ${supplier.name}`} href={`/suppliers/ledger/${supplier.id}`} className="rounded-lg p-2 text-slate-500 hover:bg-violet-50 hover:text-violet-600"><FileText size={16} /></Link><button aria-label={`Delete ${supplier.name}`} onClick={() => setDeleting(supplier)} className="rounded-lg p-2 text-slate-500 hover:bg-rose-50 hover:text-rose-600"><Trash2 size={16} /></button></div></td></tr>)}</tbody></table></div><div className="grid gap-3 p-4 lg:hidden">{visible.map((supplier) => <SupplierCard key={supplier.id} supplier={supplier} />)}</div></>}<div className="flex flex-col gap-3 border-t border-slate-100 px-5 py-4 text-sm dark:border-slate-800 sm:flex-row sm:items-center sm:justify-between"><p className="text-slate-500">Showing {filtered.length ? (safePage - 1) * pageSize + 1 : 0}–{Math.min(safePage * pageSize, filtered.length)} of {filtered.length} suppliers</p><div className="flex items-center gap-2"><button disabled={safePage === 1} onClick={() => setPage(safePage - 1)} className="rounded-lg border border-slate-200 px-3 py-1.5 font-medium disabled:cursor-not-allowed disabled:opacity-40 dark:border-slate-700">Previous</button><span className="text-slate-500">Page {safePage} of {pageCount}</span><button disabled={safePage === pageCount} onClick={() => setPage(safePage + 1)} className="rounded-lg border border-slate-200 px-3 py-1.5 font-medium disabled:cursor-not-allowed disabled:opacity-40 dark:border-slate-700">Next</button></div></div></div><DeleteSupplierDialog supplierName={deleting?.name ?? ""} open={Boolean(deleting)} onClose={() => setDeleting(null)} onConfirm={() => { if (deleting) { supplierService.delete(deleting.id); setSuppliers((items) => items.filter((item) => item.id !== deleting.id)); } setDeleting(null); }} /></>;
+  const [suppliers, setSuppliers] = useState<Supplier[]>(initialSuppliers);
+  const [query, setQuery] = useState("");
+  const [status, setStatus] = useState<"all" | SupplierStatus>("all");
+  const [sort, setSort] = useState<SortKey>("createdAt");
+  const [ascending, setAscending] = useState(false);
+  const [page, setPage] = useState(1);
+  const [deleting, setDeleting] = useState<Supplier | null>(null);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
+
+  const filtered = useMemo(() => suppliers
+    .filter((supplier) => (status === "all" || supplier.status === status) && `${supplier.name} ${supplier.contactPerson} ${supplier.phone} ${supplier.city}`.toLowerCase().includes(query.toLowerCase()))
+    .sort((a, b) => {
+      const left = a[sort];
+      const right = b[sort];
+      const comparison = typeof left === "number" ? left - (right as number) : String(left).localeCompare(String(right));
+      return ascending ? comparison : -comparison;
+    }), [suppliers, query, status, sort, ascending]);
+
+  const pageCount = Math.max(1, Math.ceil(filtered.length / pageSize));
+  const safePage = Math.min(page, pageCount);
+  const visible = filtered.slice((safePage - 1) * pageSize, safePage * pageSize);
+
+  function changeSort(key: SortKey) {
+    if (sort === key) setAscending(!ascending);
+    else {
+      setSort(key);
+      setAscending(true);
+    }
+  }
+
+  function resetFilters() {
+    setQuery("");
+    setStatus("all");
+    setPage(1);
+  }
+
+  async function confirmDelete() {
+    if (!deleting) return;
+    const target = deleting;
+    setDeleting(null);
+    setDeleteError(null);
+    setSuppliers((items) => items.filter((item) => item.id !== target.id));
+    try {
+      await supplierService.fetchDelete(target.id);
+    } catch (err) {
+      setDeleteError(err instanceof Error ? err.message : "Failed to delete the supplier.");
+      try {
+        setSuppliers(await supplierService.refresh());
+      } catch {
+        // Keep the current cached list.
+      }
+    }
+  }
+
+  return (
+    <>
+      <div className="rounded-2xl border border-slate-200 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-900">
+        <div className="flex flex-col gap-3 border-b border-slate-100 p-4 dark:border-slate-800 sm:flex-row sm:items-center sm:justify-between">
+          <div className="relative w-full sm:max-w-sm">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
+            <input value={query} onChange={(event) => { setQuery(event.target.value); setPage(1); }} placeholder="Search suppliers..." className="h-10 w-full rounded-xl border border-slate-200 bg-slate-50 pl-10 pr-3 text-sm outline-none focus:border-emerald-500 focus:ring-4 focus:ring-emerald-500/10 dark:border-slate-700 dark:bg-slate-800" />
+          </div>
+          <select value={status} onChange={(event) => { setStatus(event.target.value as "all" | SupplierStatus); setPage(1); }} className="h-10 rounded-xl border border-slate-200 bg-white px-3 text-sm outline-none focus:border-emerald-500 dark:border-slate-700 dark:bg-slate-800">
+            <option value="all">All statuses</option>
+            <option value="active">Active</option>
+            <option value="inactive">Inactive</option>
+          </select>
+        </div>
+        {deleteError && <div className="border-b border-rose-100 bg-rose-50 px-5 py-3 text-sm text-rose-700 dark:border-rose-500/30 dark:bg-rose-500/10 dark:text-rose-300">{deleteError}</div>}
+        {visible.length === 0 ? (
+          <div className="grid min-h-80 place-items-center p-8 text-center">
+            <div>
+              <Search className="mx-auto text-slate-300" size={38} />
+              <h2 className="mt-4 font-semibold">No suppliers found</h2>
+              <p className="mt-1 text-sm text-slate-500">Try adjusting your search or filter.</p>
+              <button onClick={resetFilters} className="mt-4 text-sm font-semibold text-emerald-600">Clear filters</button>
+            </div>
+          </div>
+        ) : (
+          <>
+            <div className="hidden overflow-x-auto lg:block">
+              <table className="w-full min-w-[1100px] text-left text-sm">
+                <thead className="bg-slate-50 text-xs uppercase tracking-wide text-slate-500 dark:bg-slate-800/40">
+                  <tr>
+                    {[["Supplier name", "name"], ["Contact person", null], ["Phone number", null], ["City", "city"], ["Address", null], ["Current balance", "currentBalance"], ["Status", null], ["Created date", "createdAt"]].map(([label, key]) => <th key={label as string} className="px-4 py-3 first:pl-6">{key ? <button onClick={() => changeSort(key as SortKey)} className="inline-flex items-center gap-1 font-semibold hover:text-slate-800 dark:hover:text-white">{label}<ChevronsUpDown size={14} /></button> : label}</th>)}
+                    <th className="px-4 py-3 pr-6">Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {visible.map((supplier) => (
+                    <tr key={supplier.id} className="border-t border-slate-100 dark:border-slate-800">
+                      <td className="px-4 py-4 pl-6"><Link href={`/suppliers/view/${supplier.id}`} className="font-semibold hover:text-emerald-600">{supplier.name}</Link></td>
+                      <td className="px-4 py-4">{supplier.contactPerson}</td>
+                      <td className="px-4 py-4 text-slate-500">{supplier.phone}</td>
+                      <td className="px-4 py-4">{supplier.city}</td>
+                      <td className="max-w-44 truncate px-4 py-4 text-slate-500">{supplier.address}</td>
+                      <td className="px-4 py-4 font-semibold">{formatCurrency(supplier.currentBalance)}</td>
+                      <td className="px-4 py-4"><span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${supplier.status === "active" ? "bg-emerald-50 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-400" : "bg-slate-100 text-slate-600 dark:bg-slate-800"}`}>{supplier.status}</span></td>
+                      <td className="px-4 py-4 text-slate-500">{formatDate(supplier.createdAt)}</td>
+                      <td className="px-4 py-4 pr-6">
+                        <div className="flex items-center gap-1">
+                          <Link aria-label={`View ${supplier.name}`} href={`/suppliers/view/${supplier.id}`} className="rounded-lg p-2 text-slate-500 hover:bg-emerald-50 hover:text-emerald-600"><Eye size={16} /></Link>
+                          <Link aria-label={`Edit ${supplier.name}`} href={`/suppliers/edit/${supplier.id}`} className="rounded-lg p-2 text-slate-500 hover:bg-blue-50 hover:text-blue-600"><Pencil size={16} /></Link>
+                          <Link aria-label={`View ledger for ${supplier.name}`} href={`/suppliers/ledger/${supplier.id}`} className="rounded-lg p-2 text-slate-500 hover:bg-violet-50 hover:text-violet-600"><FileText size={16} /></Link>
+                          <button aria-label={`Delete ${supplier.name}`} onClick={() => setDeleting(supplier)} className="rounded-lg p-2 text-slate-500 hover:bg-rose-50 hover:text-rose-600"><Trash2 size={16} /></button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <div className="grid gap-3 p-4 lg:hidden">{visible.map((supplier) => <SupplierCard key={supplier.id} supplier={supplier} />)}</div>
+          </>
+        )}
+        <div className="flex flex-col gap-3 border-t border-slate-100 px-5 py-4 text-sm dark:border-slate-800 sm:flex-row sm:items-center sm:justify-between">
+          <p className="text-slate-500">Showing {filtered.length ? (safePage - 1) * pageSize + 1 : 0}&ndash;{Math.min(safePage * pageSize, filtered.length)} of {filtered.length} suppliers</p>
+          <div className="flex items-center gap-2">
+            <button disabled={safePage === 1} onClick={() => setPage(safePage - 1)} className="rounded-lg border border-slate-200 px-3 py-1.5 font-medium disabled:cursor-not-allowed disabled:opacity-40 dark:border-slate-700">Previous</button>
+            <span className="text-slate-500">Page {safePage} of {pageCount}</span>
+            <button disabled={safePage === pageCount} onClick={() => setPage(safePage + 1)} className="rounded-lg border border-slate-200 px-3 py-1.5 font-medium disabled:cursor-not-allowed disabled:opacity-40 dark:border-slate-700">Next</button>
+          </div>
+        </div>
+      </div>
+      <DeleteSupplierDialog supplierName={deleting?.name ?? ""} open={Boolean(deleting)} onClose={() => setDeleting(null)} onConfirm={confirmDelete} />
+    </>
+  );
 }

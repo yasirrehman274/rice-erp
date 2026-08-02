@@ -13,11 +13,24 @@ export default function SaleViewPage({ params }: { params: Promise<{ id: string 
   const [payments, setPayments] = useState<SalePayment[]>([]);
 
   useEffect(() => {
-    params.then(({ id }) => {
-      const s = saleService.getById(id);
-      setSale(s);
-      if (s) setPayments(saleService.getSalePayments(s));
+    let mounted = true;
+    params.then(async ({ id }) => {
+      try {
+        const all = await saleService.refresh();
+        if (!mounted) return;
+        const s = all.find((item) => item.id === id);
+        setSale(s);
+        if (s) setPayments(saleService.getSalePayments(s));
+      } catch {
+        if (!mounted) return;
+        const s = saleService.getById(id);
+        setSale(s);
+        if (s) setPayments(saleService.getSalePayments(s));
+      }
     });
+    return () => {
+      mounted = false;
+    };
   }, [params]);
 
   if (sale === undefined) return <div className="grid min-h-60 place-items-center"><div className="h-8 w-8 animate-spin rounded-full border-4 border-emerald-600 border-t-transparent" /></div>;

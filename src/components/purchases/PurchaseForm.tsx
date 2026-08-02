@@ -1,7 +1,7 @@
 "use client";
 
 import { Save } from "lucide-react";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import type { Purchase, PurchaseFormValues } from "@/types/purchase";
 import { supplierService } from "@/services/supplier.service";
@@ -62,7 +62,6 @@ function toFormValues(purchase?: Purchase): PurchaseFormValues {
 }
 
 function generatePurchaseNumber() {
-  const now = new Date();
   const num = 1085 + Math.floor(Math.random() * 100);
   return `PUR-${num}`;
 }
@@ -75,7 +74,15 @@ function generateBatchNumber() {
 
 export default function PurchaseForm({ purchase }: { purchase?: Purchase }) {
   const router = useRouter();
-  const [values, setValues] = useState(() => toFormValues(purchase));
+  const [values, setValues] = useState<PurchaseFormValues>(() => {
+    const base = toFormValues(purchase);
+    if (purchase) return base;
+    return {
+      ...base,
+      purchaseNumber: base.purchaseNumber || generatePurchaseNumber(),
+      purchaseDate: base.purchaseDate || new Date().toISOString().slice(0, 10),
+    };
+  });
   const [errors, setErrors] = useState<
     Partial<Record<keyof PurchaseFormValues, string>>
   >({});
@@ -89,27 +96,26 @@ export default function PurchaseForm({ purchase }: { purchase?: Purchase }) {
   const [products, setProducts] = useState<import("@/types/product").Product[]>(
     [],
   );
-  const [lastPurchasePriceRef, setLastPurchasePriceRef] = useState("");
-  const [suggestedSalePriceRef, setSuggestedSalePriceRef] = useState("");
 
   useEffect(() => {
-    setSuppliers(supplierService.getAll());
-    setWarehouses(warehouseService.getAll());
-    setProducts(productService.getAll());
+    let mounted = true;
+    Promise.all([supplierService.refresh(), warehouseService.refresh(), productService.refresh()])
+      .then(() => {
+        if (!mounted) return;
+        setSuppliers(supplierService.getAll());
+        setWarehouses(warehouseService.getAll());
+        setProducts(productService.getAll());
+      })
+      .catch(() => {
+        if (!mounted) return;
+        setSuppliers(supplierService.getAll());
+        setWarehouses(warehouseService.getAll());
+        setProducts(productService.getAll());
+      });
+    return () => { mounted = false; };
   }, []);
 
-  useEffect(() => {
-    if (!purchase) {
-      setValues((current) => ({
-        ...current,
-        purchaseNumber: current.purchaseNumber || generatePurchaseNumber(),
-        purchaseDate:
-          current.purchaseDate || new Date().toISOString().slice(0, 10),
-      }));
-    }
-  }, [purchase]);
-
-  useEffect(() => {
+  const totals = useMemo(() => {
     const qty = Number(values.quantity) || 0;
     const bagWt = Number(values.bagWeight) || 0;
     const cpp = Number(values.currentPurchasePrice) || 0;
@@ -120,25 +126,22 @@ export default function PurchaseForm({ purchase }: { purchase?: Purchase }) {
     const transport = Number(values.transportCharges) || 0;
     const other = Number(values.otherCharges) || 0;
     const grandTotal = subtotal - discount + transport + other;
-    setValues((current) => ({
-      ...current,
-      totalWeight: String(totalWeight),
-      purchaseRate: String(purchaseRate),
-      subtotal: String(subtotal),
-      grandTotal: String(grandTotal),
-    }));
-  }, [
-    values.quantity,
-    values.bagWeight,
-    values.currentPurchasePrice,
-    values.discount,
-    values.transportCharges,
-    values.otherCharges,
-  ]);
+    return { totalWeight, purchaseRate, subtotal, grandTotal };
+  }, [values.quantity, values.bagWeight, values.currentPurchasePrice, values.discount, values.transportCharges, values.otherCharges]);
 
-  useEffect(() => {
+  const refProduct = purchase ? undefined : products.find((p) => p.id === values.productId);
+  const lastPurchasePriceRef = refProduct ? String(refProduct.lastPurchasePrice) : "";
+  const suggestedSalePriceRef = refProduct ? String(refProduct.suggestedSalePrice) : "";
+
+  function update(key: keyof PurchaseFormValues, value: string) {
+    setValues((current) => ({ ...current, [key]: value }));
+    if (errors[key]) setErrors((current) => ({ ...current, [key]: undefined }));
+  }
+
+  function selectProduct(productId: string) {
+    update("productId", productId);
     if (purchase) return;
-    const selectedProduct = products.find((p) => p.id === values.productId);
+    const selectedProduct = products.find((p) => p.id === productId);
     if (selectedProduct) {
       setValues((current) => ({
         ...current,
@@ -146,17 +149,7 @@ export default function PurchaseForm({ purchase }: { purchase?: Purchase }) {
         currentPurchasePrice: String(selectedProduct.lastPurchasePrice),
         riceVariety: selectedProduct.variety,
       }));
-      setLastPurchasePriceRef(String(selectedProduct.lastPurchasePrice));
-      setSuggestedSalePriceRef(String(selectedProduct.suggestedSalePrice));
-    } else {
-      setLastPurchasePriceRef("");
-      setSuggestedSalePriceRef("");
     }
-  }, [values.productId, purchase]);
-
-  function update(key: keyof PurchaseFormValues, value: string) {
-    setValues((current) => ({ ...current, [key]: value }));
-    if (errors[key]) setErrors((current) => ({ ...current, [key]: undefined }));
   }
 
   function submit(event: React.FormEvent<HTMLFormElement>) {
@@ -177,10 +170,17 @@ export default function PurchaseForm({ purchase }: { purchase?: Purchase }) {
       setErrors(nextErrors);
       return;
     }
+    const payload: PurchaseFormValues = {
+      ...values,
+      totalWeight: String(totals.totalWeight),
+      purchaseRate: String(totals.purchaseRate),
+      subtotal: String(totals.subtotal),
+      grandTotal: String(totals.grandTotal),
+    };
     if (purchase) {
-      purchaseService.update(purchase.id, values);
+      purchaseService.update(purchase.id, payload);
     } else {
-      purchaseService.create(values);
+      purchaseService.create(payload);
     }
     setSaved(true);
     window.setTimeout(
@@ -304,7 +304,7 @@ export default function PurchaseForm({ purchase }: { purchase?: Purchase }) {
             </span>
             <select
               value={values.productId}
-              onChange={(event) => update("productId", event.target.value)}
+              onChange={(event) => selectProduct(event.target.value)}
               className={`h-11 w-full rounded-xl border bg-white px-3 text-sm outline-none focus:ring-4 dark:bg-slate-800 ${errors.productId ? "border-rose-500 focus:border-rose-500 focus:ring-rose-500/10" : "border-slate-200 focus:border-emerald-500 focus:ring-emerald-500/10 dark:border-slate-700"}`}
             >
               <option value="">Select product</option>
@@ -450,7 +450,7 @@ export default function PurchaseForm({ purchase }: { purchase?: Purchase }) {
             </span>
             <input
               type="number"
-              value={values.totalWeight}
+              value={totals.totalWeight}
               readOnly
               className="h-11 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 text-sm text-slate-500 dark:border-slate-700 dark:bg-slate-800/50"
             />
@@ -462,7 +462,7 @@ export default function PurchaseForm({ purchase }: { purchase?: Purchase }) {
             </span>
             <input
               type="number"
-              value={values.purchaseRate}
+              value={totals.purchaseRate}
               readOnly
               className="h-11 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 text-sm text-slate-500 dark:border-slate-700 dark:bg-slate-800/50"
             />
@@ -482,7 +482,7 @@ export default function PurchaseForm({ purchase }: { purchase?: Purchase }) {
             <span className="mb-2 block text-sm font-medium">Subtotal</span>
             <input
               type="number"
-              value={values.subtotal}
+              value={totals.subtotal}
               readOnly
               className="h-11 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 text-sm text-slate-500 dark:border-slate-700 dark:bg-slate-800/50"
             />
@@ -533,9 +533,7 @@ export default function PurchaseForm({ purchase }: { purchase?: Purchase }) {
               </p>
               <p className="mt-1 text-2xl font-bold text-emerald-700 dark:text-emerald-400">
                 Rs.{" "}
-                {new Intl.NumberFormat("en-PK").format(
-                  Number(values.grandTotal) || 0,
-                )}
+                {new Intl.NumberFormat("en-PK").format(totals.grandTotal)}
               </p>
             </article>
           </div>
@@ -555,7 +553,7 @@ export default function PurchaseForm({ purchase }: { purchase?: Purchase }) {
             <input
               type="number"
               min="0"
-              max={values.grandTotal}
+              max={totals.grandTotal}
               value={values.paidAmount}
               onChange={(event) => update("paidAmount", event.target.value)}
               placeholder="0"
@@ -577,7 +575,7 @@ export default function PurchaseForm({ purchase }: { purchase?: Purchase }) {
               <option value="online">Online</option>
             </select>
           </label>
-          {Number(values.grandTotal) > 0 && (
+          {totals.grandTotal > 0 && (
             <div className="md:col-span-2">
               <article className="rounded-xl border border-amber-200 bg-amber-50 p-4 dark:border-amber-500/20 dark:bg-amber-500/10">
                 <p className="text-sm font-medium text-amber-700 dark:text-amber-400">
@@ -586,8 +584,7 @@ export default function PurchaseForm({ purchase }: { purchase?: Purchase }) {
                 <p className="mt-1 text-2xl font-bold text-amber-700 dark:text-amber-400">
                   Rs.{" "}
                   {new Intl.NumberFormat("en-PK").format(
-                    (Number(values.grandTotal) || 0) -
-                      (Number(values.paidAmount) || 0),
+                    totals.grandTotal - (Number(values.paidAmount) || 0),
                   )}
                 </p>
               </article>

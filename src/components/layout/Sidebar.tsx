@@ -12,6 +12,7 @@ import {
   FileBarChart,
   Settings,
   Wheat,
+  Receipt,
 } from "lucide-react";
 import SidebarItem from "./SidebarItem";
 
@@ -21,6 +22,7 @@ const menu = [
   { title: "Purchases", href: "/purchases", icon: ShoppingCart },
   { title: "Products", href: "/products", icon: Package },
   { title: "Sales", href: "/sales", icon: BadgeDollarSign },
+  { title: "Expenses", href: "/expenses", icon: Receipt },
   { title: "Customers", href: "/customers", icon: Users },
   { title: "Suppliers", href: "/suppliers", icon: Truck },
   { title: "Warehouses", href: "/warehouses", icon: Warehouse },

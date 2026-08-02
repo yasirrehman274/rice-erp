@@ -1,7 +1,5 @@
 "use client";
 
-import { ArrowUpRight } from "lucide-react";
-import Link from "next/link";
 import { purchaseService } from "@/services/purchase.service";
 import { saleService } from "@/services/sale.service";
 import { useState, useEffect } from "react";
@@ -22,7 +20,13 @@ function toTxns(purchases: Purchase[], sales: Sale[]): Txn[] {
 
 export default function RecentTransactions() {
   const [txns, setTxns] = useState<Txn[]>([]);
-  useEffect(() => { setTxns(toTxns(purchaseService.getAll(), saleService.getAll())); }, []);
+  useEffect(() => {
+    let mounted = true;
+    Promise.all([purchaseService.refresh(), saleService.refresh()])
+      .then(() => { if (mounted) setTxns(toTxns(purchaseService.getAll(), saleService.getAll())); })
+      .catch(() => { if (mounted) setTxns(toTxns(purchaseService.getAll(), saleService.getAll())); });
+    return () => { mounted = false; };
+  }, []);
 
   return <section className="rounded-2xl border border-slate-200 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-900">
     <div className="flex items-center justify-between p-5 sm:p-6"><div><h2 className="font-semibold">Recent transactions</h2><p className="mt-1 text-sm text-slate-500">Latest purchases and sales activity</p></div></div>

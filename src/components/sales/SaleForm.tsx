@@ -1,162 +1,146 @@
 "use client";
 
-import { Save } from "lucide-react";
-import { useState, useEffect } from "react";
+import { Plus, Save, Trash2 } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
+import type { Customer } from "@/types/customer";
+import type { Product } from "@/types/product";
+import type { Warehouse } from "@/types/warehouse";
 import type { Sale, SaleFormValues } from "@/types/sale";
 import { customerService } from "@/services/customer.service";
-import { warehouseService } from "@/services/warehouse.service";
+import { inventoryService } from "@/services/inventory.service";
 import { productService } from "@/services/product.service";
 import { saleService } from "@/services/sale.service";
+import { warehouseService } from "@/services/warehouse.service";
 
-const emptyValues: SaleFormValues = { saleNumber: "", saleDate: "", customerId: "", warehouseId: "", productId: "", batchNumber: "", riceVariety: "", quantity: "", bagWeight: "", totalWeight: "", currentSalePrice: "", saleRate: "", subtotal: "", discount: "", transportCharges: "", otherCharges: "", grandTotal: "", receivedAmount: "", paymentMethod: "cash", status: "pending", notes: "" };
+const emptyValues: SaleFormValues = { saleNumber: "", saleDate: "", customerId: "", warehouseId: "", productId: "", batchNumber: "", riceVariety: "", quantity: "1", bagWeight: "", totalWeight: "", currentSalePrice: "", saleRate: "", subtotal: "", discount: "", transportCharges: "", otherCharges: "", grandTotal: "", receivedAmount: "", paymentMethod: "cash", status: "pending", notes: "" };
+
+const inputClass = "h-12 w-full rounded-xl border border-slate-300 bg-white px-4 text-sm text-slate-800 shadow-sm outline-none transition focus:border-emerald-500 focus:ring-4 focus:ring-emerald-500/10 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100";
 
 function toFormValues(sale?: Sale): SaleFormValues {
-  return sale ? {
-    saleNumber: sale.saleNumber, saleDate: sale.saleDate, customerId: sale.customerId, warehouseId: sale.warehouseId, productId: sale.productId, batchNumber: sale.batchNumber, riceVariety: sale.riceVariety, quantity: String(sale.quantity), bagWeight: String(sale.bagWeight), totalWeight: String(sale.totalWeight), currentSalePrice: String(sale.currentSalePrice), saleRate: String(sale.saleRate), subtotal: String(sale.subtotal), discount: String(sale.discount), transportCharges: String(sale.transportCharges), otherCharges: String(sale.otherCharges), grandTotal: String(sale.grandTotal), receivedAmount: String(sale.receivedAmount), paymentMethod: sale.paymentMethod, status: sale.status, notes: sale.notes,
-  } : emptyValues;
+  if (!sale) return { ...emptyValues, saleNumber: `SAL-${1285 + Math.floor(Math.random() * 100)}`, saleDate: new Date().toISOString().slice(0, 10) };
+  return { saleNumber: sale.saleNumber, saleDate: sale.saleDate, customerId: sale.customerId, warehouseId: sale.warehouseId, productId: sale.productId, batchNumber: sale.batchNumber, riceVariety: sale.riceVariety, quantity: String(sale.quantity), bagWeight: String(sale.bagWeight), totalWeight: String(sale.totalWeight), currentSalePrice: String(sale.currentSalePrice), saleRate: String(sale.saleRate), subtotal: String(sale.subtotal), discount: String(sale.discount), transportCharges: String(sale.transportCharges), otherCharges: String(sale.otherCharges), grandTotal: String(sale.grandTotal), receivedAmount: String(sale.receivedAmount), paymentMethod: sale.paymentMethod, status: sale.status, notes: sale.notes };
 }
 
-function generateSaleNumber() {
-  const num = 1285 + Math.floor(Math.random() * 100);
-  return `SAL-${num}`;
+function currency(value: number) {
+  return `Rs. ${new Intl.NumberFormat("en-PK", { maximumFractionDigits: 2 }).format(value)}`;
 }
 
 export default function SaleForm({ sale }: { sale?: Sale }) {
   const router = useRouter();
   const [values, setValues] = useState(() => toFormValues(sale));
+  const [customers, setCustomers] = useState<Customer[]>([]);
+  const [products, setProducts] = useState<Product[]>([]);
+  const [warehouses, setWarehouses] = useState<Warehouse[]>([]);
   const [errors, setErrors] = useState<Partial<Record<keyof SaleFormValues, string>>>({});
   const [saved, setSaved] = useState(false);
-  const [customers, setCustomers] = useState<import("@/types/customer").Customer[]>([]);
-  const [warehouses, setWarehouses] = useState<import("@/types/warehouse").Warehouse[]>([]);
-  const [products, setProducts] = useState<import("@/types/product").Product[]>([]);
-  const [lastPurchasePriceRef, setLastPurchasePriceRef] = useState("");
-  const [suggestedSalePriceRef, setSuggestedSalePriceRef] = useState("");
-
-  useEffect(() => { setCustomers(customerService.getAll()); setWarehouses(warehouseService.getAll()); setProducts(productService.getAll()); }, []);
 
   useEffect(() => {
-    if (!sale) {
-      setValues((current) => ({ ...current, saleNumber: current.saleNumber || generateSaleNumber(), saleDate: current.saleDate || new Date().toISOString().slice(0, 10) }));
-    }
-  }, [sale]);
+    // Browser-only local storage must be read after hydration.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setCustomers(customerService.getAll());
+    setProducts(productService.getAll());
+    setWarehouses(warehouseService.getAll());
+  }, []);
 
-  useEffect(() => {
-    const qty = Number(values.quantity) || 0;
-    const bagWt = Number(values.bagWeight) || 0;
-    const csp = Number(values.currentSalePrice) || 0;
-    const totalWeight = qty * bagWt;
-    const saleRate = totalWeight > 0 ? (csp * qty) / totalWeight : 0;
-    const subtotal = totalWeight * saleRate;
+  const selectedCustomer = customers.find((customer) => customer.id === values.customerId);
+  const stock = values.productId && values.warehouseId ? inventoryService.getByProductAndWarehouse(values.productId, values.warehouseId)?.availableStock ?? 0 : 0;
+  const totals = useMemo(() => {
+    const quantity = Number(values.quantity) || 0;
+    const price = Number(values.currentSalePrice) || 0;
+    const subtotal = quantity * price;
     const discount = Number(values.discount) || 0;
-    const transport = Number(values.transportCharges) || 0;
+    const shipping = Number(values.transportCharges) || 0;
     const other = Number(values.otherCharges) || 0;
-    const grandTotal = subtotal - discount + transport + other;
-    setValues((current) => ({ ...current, totalWeight: String(totalWeight), saleRate: String(saleRate), subtotal: String(subtotal), grandTotal: String(grandTotal) }));
-  }, [values.quantity, values.bagWeight, values.currentSalePrice, values.discount, values.transportCharges, values.otherCharges]);
-
-  useEffect(() => {
-    if (sale) return;
-    const selectedProduct = products.find((p) => p.id === values.productId);
-    if (selectedProduct) {
-      setValues((current) => ({
-        ...current,
-        bagWeight: selectedProduct.bagWeight.replace(/[^\d.]/g, ""),
-        currentSalePrice: String(selectedProduct.suggestedSalePrice),
-        riceVariety: selectedProduct.variety,
-      }));
-      setLastPurchasePriceRef(String(selectedProduct.lastPurchasePrice));
-      setSuggestedSalePriceRef(String(selectedProduct.suggestedSalePrice));
-    } else {
-      setLastPurchasePriceRef("");
-      setSuggestedSalePriceRef("");
-    }
-  }, [values.productId, sale]);
+    return { subtotal, grandTotal: subtotal - discount + shipping + other };
+  }, [values.quantity, values.currentSalePrice, values.discount, values.transportCharges, values.otherCharges]);
 
   function update(key: keyof SaleFormValues, value: string) {
-    setValues((current) => ({ ...current, [key]: value }));
+    setValues((current) => {
+      const next = { ...current, [key]: value };
+      if (key === "productId") {
+        const product = products.find((item) => item.id === value);
+        if (product) {
+          next.bagWeight = product.bagWeight.replace(/[^\d.]/g, "");
+          next.currentSalePrice = String(product.suggestedSalePrice);
+          next.riceVariety = product.variety;
+        }
+      }
+      return next;
+    });
     if (errors[key]) setErrors((current) => ({ ...current, [key]: undefined }));
   }
 
   function submit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const nextErrors: Partial<Record<keyof SaleFormValues, string>> = {};
-    if (!values.saleNumber.trim()) nextErrors.saleNumber = "Sale number is required.";
-    if (!values.saleDate) nextErrors.saleDate = "Sale date is required.";
     if (!values.customerId) nextErrors.customerId = "Customer is required.";
-    if (!values.warehouseId) nextErrors.warehouseId = "Warehouse is required.";
-    if (!values.productId) nextErrors.productId = "Product is required.";
-    if (!values.quantity || Number(values.quantity) <= 0) nextErrors.quantity = "Quantity must be greater than 0.";
-    if (!values.currentSalePrice || Number(values.currentSalePrice) <= 0) nextErrors.currentSalePrice = "Current sale price is required.";
-    if (Object.keys(nextErrors).length) { setErrors(nextErrors); return; }
+    if (!values.warehouseId) nextErrors.warehouseId = "Sold at is required.";
+    if (!values.productId) nextErrors.productId = "Please select a product.";
+    if ((Number(values.quantity) || 0) <= 0) nextErrors.quantity = "Quantity must be greater than zero.";
+    if ((Number(values.currentSalePrice) || 0) <= 0) nextErrors.currentSalePrice = "Price is required.";
+    if (Object.keys(nextErrors).length) return setErrors(nextErrors);
+
+    const finalValues: SaleFormValues = {
+      ...values,
+      totalWeight: String((Number(values.quantity) || 0) * (Number(values.bagWeight) || 0)),
+      saleRate: String(Number(values.bagWeight) ? (Number(values.currentSalePrice) || 0) / Number(values.bagWeight) : 0),
+      subtotal: String(totals.subtotal),
+      grandTotal: String(totals.grandTotal),
+      receivedAmount: values.receivedAmount || (values.status === "dispatched" ? String(totals.grandTotal) : "0"),
+    };
     try {
-      if (sale) { saleService.update(sale.id, values); } else { saleService.create(values); }
+      if (sale) saleService.update(sale.id, finalValues);
+      else saleService.create(finalValues);
       setSaved(true);
-      window.setTimeout(() => router.push(sale ? `/sales/view/${sale.id}` : "/sales"), 650);
-    } catch (err: unknown) {
-      setErrors({ productId: err instanceof Error ? err.message : "Failed to save sale" });
+      window.setTimeout(() => router.push(sale ? `/sales/view/${sale.id}` : "/sales"), 550);
+    } catch (error) {
+      setErrors({ productId: error instanceof Error ? error.message : "Unable to save sale." });
     }
   }
 
-  if (saved) {
-    return <div className="grid min-h-60 place-items-center rounded-2xl border border-slate-200 bg-white p-8 text-center shadow-sm dark:border-slate-800 dark:bg-slate-900"><div><div className="mx-auto grid size-14 place-items-center rounded-full bg-emerald-100 text-emerald-600 dark:bg-emerald-500/15"><Save size={26} /></div><h2 className="mt-4 text-lg font-bold">Sale saved successfully</h2><p className="mt-1 text-sm text-slate-500">Redirecting...</p></div></div>;
-  }
+  if (saved) return <div className="grid min-h-64 place-items-center rounded-2xl border border-slate-200 bg-white p-8 text-center shadow-sm"><div><Save className="mx-auto text-emerald-600" size={32} /><h2 className="mt-3 text-lg font-bold">Sale saved successfully</h2><p className="mt-1 text-sm text-slate-500">Redirecting to sales…</p></div></div>;
 
-  const selectedCustomer = customers.find((c) => c.id === values.customerId);
-
-  return <form onSubmit={submit} className="space-y-6">
-    <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900 sm:p-6">
-      <div className="mb-6"><h2 className="font-semibold">Sale information</h2><p className="mt-1 text-sm text-slate-500">Enter the sale details and invoice information.</p></div>
-      <div className="grid gap-5 md:grid-cols-2">
-        <label><span className="mb-2 block text-sm font-medium">Sale Number <span className="ml-1 text-rose-600">*</span></span><input value={values.saleNumber} onChange={(event) => update("saleNumber", event.target.value)} placeholder="SAL-1285" className={`h-11 w-full rounded-xl border bg-white px-3 text-sm outline-none focus:ring-4 dark:bg-slate-800 ${errors.saleNumber ? "border-rose-500 focus:border-rose-500 focus:ring-rose-500/10" : "border-slate-200 focus:border-emerald-500 focus:ring-emerald-500/10 dark:border-slate-700"}`} />{errors.saleNumber && <span className="mt-1.5 block text-xs text-rose-600">{errors.saleNumber}</span>}</label>
-        <label><span className="mb-2 block text-sm font-medium">Sale Date <span className="ml-1 text-rose-600">*</span></span><input type="date" value={values.saleDate} onChange={(event) => update("saleDate", event.target.value)} className={`h-11 w-full rounded-xl border bg-white px-3 text-sm outline-none focus:ring-4 dark:bg-slate-800 ${errors.saleDate ? "border-rose-500 focus:border-rose-500 focus:ring-rose-500/10" : "border-slate-200 focus:border-emerald-500 focus:ring-emerald-500/10 dark:border-slate-700"}`} />{errors.saleDate && <span className="mt-1.5 block text-xs text-rose-600">{errors.saleDate}</span>}</label>
-        <label><span className="mb-2 block text-sm font-medium">Customer <span className="ml-1 text-rose-600">*</span></span><select value={values.customerId} onChange={(event) => update("customerId", event.target.value)} className={`h-11 w-full rounded-xl border bg-white px-3 text-sm outline-none focus:ring-4 dark:bg-slate-800 ${errors.customerId ? "border-rose-500 focus:border-rose-500 focus:ring-rose-500/10" : "border-slate-200 focus:border-emerald-500 focus:ring-emerald-500/10 dark:border-slate-700"}`}><option value="">Select customer</option>{customers.filter((c) => c.status === "active").map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}</select>{errors.customerId && <span className="mt-1.5 block text-xs text-rose-600">{errors.customerId}</span>}</label>
-        <label><span className="mb-2 block text-sm font-medium">Warehouse <span className="ml-1 text-rose-600">*</span></span><select value={values.warehouseId} onChange={(event) => update("warehouseId", event.target.value)} className={`h-11 w-full rounded-xl border bg-white px-3 text-sm outline-none focus:ring-4 dark:bg-slate-800 ${errors.warehouseId ? "border-rose-500 focus:border-rose-500 focus:ring-rose-500/10" : "border-slate-200 focus:border-emerald-500 focus:ring-emerald-500/10 dark:border-slate-700"}`}><option value="">Select warehouse</option>{warehouses.filter((w) => w.status === "active").map((w) => <option key={w.id} value={w.id}>{w.name}</option>)}</select>{errors.warehouseId && <span className="mt-1.5 block text-xs text-rose-600">{errors.warehouseId}</span>}</label>
-        <label><span className="mb-2 block text-sm font-medium">Product <span className="ml-1 text-rose-600">*</span></span><select value={values.productId} onChange={(event) => update("productId", event.target.value)} className={`h-11 w-full rounded-xl border bg-white px-3 text-sm outline-none focus:ring-4 dark:bg-slate-800 ${errors.productId ? "border-rose-500 focus:border-rose-500 focus:ring-rose-500/10" : "border-slate-200 focus:border-emerald-500 focus:ring-emerald-500/10 dark:border-slate-700"}`}><option value="">Select product</option>{products.filter((p) => p.status === "active").map((p) => <option key={p.id} value={p.id}>{p.productName}</option>)}</select>{errors.productId && <span className="mt-1.5 block text-xs text-rose-600">{errors.productId}</span>}</label>
-        <label><span className="mb-2 block text-sm font-medium">Batch Number</span><input value={values.batchNumber} onChange={(event) => update("batchNumber", event.target.value)} placeholder="BATCH-2026-0724-001" className="h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm outline-none focus:border-emerald-500 focus:ring-4 focus:ring-emerald-500/10 dark:border-slate-700 dark:bg-slate-800" /></label>
-        <label><span className="mb-2 block text-sm font-medium">Rice Variety</span><input value={values.riceVariety} onChange={(event) => update("riceVariety", event.target.value)} placeholder="e.g. Basmati" className="h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm outline-none focus:border-emerald-500 focus:ring-4 focus:ring-emerald-500/10 dark:border-slate-700 dark:bg-slate-800" /></label>
-        {selectedCustomer && <div className="grid grid-cols-2 gap-4 md:col-span-2"><article className="rounded-xl border border-slate-200 bg-slate-50 p-4 dark:border-slate-700 dark:bg-slate-800/50"><p className="text-xs text-slate-500">Customer Balance</p><p className="mt-1 text-lg font-bold">Rs. {new Intl.NumberFormat("en-PK").format(selectedCustomer.currentBalance)}</p></article><article className="rounded-xl border border-slate-200 bg-slate-50 p-4 dark:border-slate-700 dark:bg-slate-800/50"><p className="text-xs text-slate-500">Credit Limit</p><p className="mt-1 text-lg font-bold">Rs. {new Intl.NumberFormat("en-PK").format(selectedCustomer.creditLimit)}</p></article></div>}
+  return <form onSubmit={submit} className="space-y-9">
+    <section className="border-t border-slate-800 pt-7 dark:border-slate-600">
+      <div className="grid gap-5 lg:grid-cols-3">
+        <label><span className="mb-2 block text-sm font-medium">Customer Name <span className="text-rose-600">*</span></span><select value={values.customerId} onChange={(event) => update("customerId", event.target.value)} className={inputClass}><option value="">Select customer</option>{customers.filter((customer) => customer.status === "active").map((customer) => <option key={customer.id} value={customer.id}>{customer.name}</option>)}</select>{errors.customerId && <span className="mt-1 block text-xs text-rose-600">{errors.customerId}</span>}</label>
+        <label><span className="mb-2 block text-sm font-medium">Customer Phone</span><input value={selectedCustomer?.phone ?? ""} readOnly placeholder="Select a customer first" className={`${inputClass} bg-slate-50 text-slate-500 dark:bg-slate-800`} /></label>
+        <label><span className="mb-2 block text-sm font-medium">Seller Name <span className="text-rose-600">*</span></span><select required defaultValue="counter" className={inputClass}><option value="counter">Shop Counter</option><option value="manager">Sales Manager</option><option value="owner">Owner</option></select></label>
       </div>
     </section>
 
-    <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900 sm:p-6">
-      <div className="mb-6"><h2 className="font-semibold">Quantity & pricing</h2><p className="mt-1 text-sm text-slate-500">Enter quantity, weight, and rate details.</p></div>
-      <div className="grid gap-5 md:grid-cols-2">
-        <label><span className="mb-2 block text-sm font-medium">Last Purchase Price (Reference)</span><input type="number" value={lastPurchasePriceRef} readOnly className="h-11 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 text-sm text-slate-500 dark:border-slate-700 dark:bg-slate-800/50" /></label>
-        <label><span className="mb-2 block text-sm font-medium">Suggested Sale Price (Reference)</span><input type="number" value={suggestedSalePriceRef} readOnly className="h-11 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 text-sm text-slate-500 dark:border-slate-700 dark:bg-slate-800/50" /></label>
-        <label><span className="mb-2 block text-sm font-medium">Current Sale Price <span className="ml-1 text-rose-600">*</span></span><input type="number" min="0" value={values.currentSalePrice} onChange={(event) => update("currentSalePrice", event.target.value)} placeholder="0" className={`h-11 w-full rounded-xl border bg-white px-3 text-sm outline-none focus:ring-4 dark:bg-slate-800 ${errors.currentSalePrice ? "border-rose-500 focus:border-rose-500 focus:ring-rose-500/10" : "border-slate-200 focus:border-emerald-500 focus:ring-emerald-500/10 dark:border-slate-700"}`} />{errors.currentSalePrice && <span className="mt-1.5 block text-xs text-rose-600">{errors.currentSalePrice}</span>}</label>
-        <label><span className="mb-2 block text-sm font-medium">Quantity (Bags) <span className="ml-1 text-rose-600">*</span></span><input type="number" min="1" value={values.quantity} onChange={(event) => update("quantity", event.target.value)} placeholder="0" className={`h-11 w-full rounded-xl border bg-white px-3 text-sm outline-none focus:ring-4 dark:bg-slate-800 ${errors.quantity ? "border-rose-500 focus:border-rose-500 focus:ring-rose-500/10" : "border-slate-200 focus:border-emerald-500 focus:ring-emerald-500/10 dark:border-slate-700"}`} />{errors.quantity && <span className="mt-1.5 block text-xs text-rose-600">{errors.quantity}</span>}</label>
-        <label><span className="mb-2 block text-sm font-medium">Bag Weight (KG)</span><input type="number" min="0" step="0.5" value={values.bagWeight} readOnly className="h-11 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 text-sm text-slate-500 dark:border-slate-700 dark:bg-slate-800/50" /></label>
-        <label><span className="mb-2 block text-sm font-medium">Total Weight (KG)</span><input type="number" value={values.totalWeight} readOnly className="h-11 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 text-sm text-slate-500 dark:border-slate-700 dark:bg-slate-800/50" /></label>
-        <label><span className="mb-2 block text-sm font-medium">Sale Rate (per KG)</span><input type="number" value={values.saleRate} readOnly className="h-11 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 text-sm text-slate-500 dark:border-slate-700 dark:bg-slate-800/50" /></label>
+    <section>
+      <h2 className="mb-5 text-xl font-bold">Sale Items</h2>
+      <div className="overflow-hidden rounded-xl border border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-900">
+        <div className="hidden grid-cols-[minmax(260px,2.2fr)_0.75fr_0.8fr_0.75fr_0.9fr_64px] border-b border-slate-200 px-5 py-4 text-sm font-semibold lg:grid dark:border-slate-700"><span>Product ↕</span><span>Stock ↕</span><span>Price ↕</span><span>Quantity ↕</span><span>Total ↕</span><span className="text-center">Action</span></div>
+        <div className="grid gap-4 px-5 py-5 lg:grid-cols-[minmax(260px,2.2fr)_0.75fr_0.8fr_0.75fr_0.9fr_64px] lg:items-center">
+          <label className="block lg:hidden"><span className="mb-2 block text-sm font-medium">Product</span></label><div><select id="sale-product" value={values.productId} onChange={(event) => update("productId", event.target.value)} className={inputClass}><option value="">Search product…</option>{products.filter((product) => product.status === "active").map((product) => <option key={product.id} value={product.id}>{product.productName}</option>)}</select>{errors.productId && <span className="mt-1 block text-xs text-rose-600">{errors.productId}</span>}</div>
+          <div><span className="mb-1 block text-xs font-medium text-slate-500 lg:hidden">Stock</span><p className="text-sm font-medium">{stock.toLocaleString()}</p></div>
+          <div><span className="mb-1 block text-xs font-medium text-slate-500 lg:hidden">Price</span><input type="number" min="0" value={values.currentSalePrice} onChange={(event) => update("currentSalePrice", event.target.value)} placeholder="0" className={inputClass} />{errors.currentSalePrice && <span className="mt-1 block text-xs text-rose-600">{errors.currentSalePrice}</span>}</div>
+          <div><span className="mb-1 block text-xs font-medium text-slate-500 lg:hidden">Quantity</span><input type="number" min="1" value={values.quantity} onChange={(event) => update("quantity", event.target.value)} className={inputClass} />{errors.quantity && <span className="mt-1 block text-xs text-rose-600">{errors.quantity}</span>}</div>
+          <div><span className="mb-1 block text-xs font-medium text-slate-500 lg:hidden">Total</span><p className="text-sm font-semibold">{currency(totals.subtotal)}</p></div>
+          <button type="button" onClick={() => { update("productId", ""); update("currentSalePrice", ""); }} className="justify-self-start rounded-lg p-2 text-rose-500 hover:bg-rose-50 lg:justify-self-center" aria-label="Clear item"><Trash2 size={19} /></button>
+        </div>
       </div>
+      <p className="mt-2 text-xs text-slate-500">Each sale currently supports one product item.</p>
+      <button type="button" onClick={() => document.getElementById("sale-product")?.focus()} className="mt-5 inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold shadow-sm hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900"><Plus size={17} />Add Item</button>
     </section>
 
-    <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900 sm:p-6">
-      <div className="mb-6"><h2 className="font-semibold">Cost breakdown</h2><p className="mt-1 text-sm text-slate-500">Review subtotal, charges, and final total.</p></div>
-      <div className="grid gap-5 md:grid-cols-2">
-        <label><span className="mb-2 block text-sm font-medium">Subtotal</span><input type="number" value={values.subtotal} readOnly className="h-11 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 text-sm text-slate-500 dark:border-slate-700 dark:bg-slate-800/50" /></label>
-        <label><span className="mb-2 block text-sm font-medium">Discount</span><input type="number" min="0" value={values.discount} onChange={(event) => update("discount", event.target.value)} placeholder="0" className="h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm outline-none focus:border-emerald-500 focus:ring-4 focus:ring-emerald-500/10 dark:border-slate-700 dark:bg-slate-800" /></label>
-        <label><span className="mb-2 block text-sm font-medium">Transport Charges</span><input type="number" min="0" value={values.transportCharges} onChange={(event) => update("transportCharges", event.target.value)} placeholder="0" className="h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm outline-none focus:border-emerald-500 focus:ring-4 focus:ring-emerald-500/10 dark:border-slate-700 dark:bg-slate-800" /></label>
-        <label><span className="mb-2 block text-sm font-medium">Other Charges</span><input type="number" min="0" value={values.otherCharges} onChange={(event) => update("otherCharges", event.target.value)} placeholder="0" className="h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm outline-none focus:border-emerald-500 focus:ring-4 focus:ring-emerald-500/10 dark:border-slate-700 dark:bg-slate-800" /></label>
-        <div className="md:col-span-2"><article className="rounded-xl border border-emerald-600 bg-emerald-50 p-4 dark:bg-emerald-500/10"><p className="text-sm font-medium text-emerald-700 dark:text-emerald-400">Grand Total</p><p className="mt-1 text-2xl font-bold text-emerald-700 dark:text-emerald-400">Rs. {new Intl.NumberFormat("en-PK").format(Number(values.grandTotal) || 0)}</p></article></div>
+    <section className="grid gap-8 lg:grid-cols-[minmax(0,1fr)_minmax(360px,0.95fr)] lg:items-start">
+      <div className="space-y-5">
+        <label><span className="mb-2 block text-sm font-medium">Payment Method</span><select value={values.paymentMethod} onChange={(event) => update("paymentMethod", event.target.value)} className={`${inputClass} max-w-md`}><option value="cash">Cash</option><option value="bank">Bank Transfer</option><option value="cheque">Cheque</option><option value="online">Online</option></select></label>
+        <label><span className="mb-2 block text-sm font-medium">Sold at <span className="text-rose-600">*</span></span><select value={values.warehouseId} onChange={(event) => update("warehouseId", event.target.value)} className={`${inputClass} max-w-md`}><option value="">Select warehouse</option>{warehouses.filter((warehouse) => warehouse.status === "active").map((warehouse) => <option key={warehouse.id} value={warehouse.id}>{warehouse.name}</option>)}</select>{errors.warehouseId && <span className="mt-1 block text-xs text-rose-600">{errors.warehouseId}</span>}</label>
+        <label><span className="mb-2 block text-sm font-medium">Sales Note</span><textarea value={values.notes} onChange={(event) => update("notes", event.target.value)} placeholder="Sales notes" rows={4} className={`${inputClass} h-auto max-w-md py-3`} /></label>
+        <label><span className="mb-2 block text-sm font-medium">Payment Status</span><select value={values.status} onChange={(event) => update("status", event.target.value)} className={`${inputClass} max-w-md`}><option value="pending">Pending</option><option value="partial">Partial</option><option value="dispatched">Paid</option><option value="cancelled">Cancelled</option></select></label>
+        <div className="grid max-w-md grid-cols-2 gap-4"><label><span className="mb-2 block text-sm font-medium">Sale Date</span><input type="date" value={values.saleDate} onChange={(event) => update("saleDate", event.target.value)} className={inputClass} /></label><label><span className="mb-2 block text-sm font-medium">Invoice #</span><input value={values.saleNumber} onChange={(event) => update("saleNumber", event.target.value)} className={inputClass} /></label></div>
       </div>
-    </section>
 
-    <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900 sm:p-6">
-      <div className="mb-6"><h2 className="font-semibold">Payment details</h2><p className="mt-1 text-sm text-slate-500">Record the payment information for this sale.</p></div>
-      <div className="grid gap-5 md:grid-cols-2">
-        <label><span className="mb-2 block text-sm font-medium">Received Amount</span><input type="number" min="0" max={values.grandTotal} value={values.receivedAmount} onChange={(event) => update("receivedAmount", event.target.value)} placeholder="0" className="h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm outline-none focus:border-emerald-500 focus:ring-4 focus:ring-emerald-500/10 dark:border-slate-700 dark:bg-slate-800" /></label>
-        <label><span className="mb-2 block text-sm font-medium">Payment Method</span><select value={values.paymentMethod} onChange={(event) => update("paymentMethod", event.target.value)} className="h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm outline-none focus:border-emerald-500 dark:border-slate-700 dark:bg-slate-800"><option value="cash">Cash</option><option value="bank">Bank Transfer</option><option value="cheque">Cheque</option><option value="online">Online</option></select></label>
-        {Number(values.grandTotal) > 0 && <div className="md:col-span-2"><article className="rounded-xl border border-amber-200 bg-amber-50 p-4 dark:border-amber-500/20 dark:bg-amber-500/10"><p className="text-sm font-medium text-amber-700 dark:text-amber-400">Remaining Balance</p><p className="mt-1 text-2xl font-bold text-amber-700 dark:text-amber-400">Rs. {new Intl.NumberFormat("en-PK").format((Number(values.grandTotal) || 0) - (Number(values.receivedAmount) || 0))}</p></article></div>}
-        <label className="md:col-span-2"><span className="mb-2 block text-sm font-medium">Status</span><select value={values.status} onChange={(event) => update("status", event.target.value)} className="h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm outline-none focus:border-emerald-500 dark:border-slate-700 dark:bg-slate-800"><option value="pending">Pending</option><option value="dispatched">Dispatched</option><option value="partial">Partial</option><option value="cancelled">Cancelled</option></select></label>
-        <label className="md:col-span-2"><span className="mb-2 block text-sm font-medium">Notes</span><textarea value={values.notes} onChange={(event) => update("notes", event.target.value)} placeholder="Additional notes..." rows={3} className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm outline-none focus:border-emerald-500 focus:ring-4 focus:ring-emerald-500/10 dark:border-slate-700 dark:bg-slate-800" /></label>
-      </div>
+      <aside className="border-y-2 border-slate-800 py-5 dark:border-slate-500">
+        <div className="space-y-4 text-base"><div className="flex justify-between text-slate-600 dark:text-slate-300"><span>Subtotal:</span><strong>{currency(totals.subtotal)}</strong></div><div className="flex justify-between text-slate-600 dark:text-slate-300"><span>Tax (0%):</span><span>Rs. 0.00</span></div><label className="block"><span className="mb-2 block font-medium">Shipping</span><input type="number" min="0" value={values.transportCharges} onChange={(event) => update("transportCharges", event.target.value)} placeholder="0" className={inputClass} /></label><label className="block"><span className="mb-2 block font-medium">Discount</span><input type="number" min="0" value={values.discount} onChange={(event) => update("discount", event.target.value)} placeholder="0" className={inputClass} /></label></div>
+        <div className="mt-4 flex justify-between border-t-2 border-slate-800 pt-4 text-xl font-bold dark:border-slate-500"><span>Grand Total:</span><span>{currency(totals.grandTotal)}</span></div>
+        <button type="submit" className="mt-8 inline-flex h-13 w-full items-center justify-center gap-2 rounded-xl bg-emerald-600 px-5 py-3 text-sm font-bold text-white shadow-sm transition hover:bg-emerald-700"><Save size={17} />{sale ? "Update Sale" : "Save Sale"}</button>
+      </aside>
     </section>
-
-    <div className="flex justify-end gap-3">
-      <button type="button" onClick={() => router.back()} className="rounded-xl border border-slate-200 px-5 py-2.5 text-sm font-semibold hover:bg-slate-50 dark:border-slate-700 dark:hover:bg-slate-800">Cancel</button>
-      <button type="submit" disabled={saved} className="inline-flex items-center gap-2 rounded-xl bg-emerald-600 px-5 py-2.5 text-sm font-semibold text-white shadow-lg shadow-emerald-600/20 hover:bg-emerald-700 disabled:opacity-70"><Save size={16} />{saved ? "Saving..." : sale ? "Update sale" : "Save sale"}</button>
-    </div>
   </form>;
 }

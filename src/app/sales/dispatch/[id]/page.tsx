@@ -17,10 +17,19 @@ export default function DispatchSalePage({ params }: { params: Promise<{ id: str
   const [dispatched, setDispatched] = useState(false);
 
   useEffect(() => {
-    params.then(({ id }) => {
+    let mounted = true;
+    params.then(async ({ id }) => {
       setSaleId(id);
-      setSale(saleService.getById(id));
+      try {
+        const all = await saleService.refresh();
+        if (mounted) setSale(all.find((item) => item.id === id));
+      } catch {
+        if (mounted) setSale(saleService.getById(id));
+      }
     });
+    return () => {
+      mounted = false;
+    };
   }, [params]);
 
   if (!sale) return <div className="grid min-h-60 place-items-center"><div className="h-8 w-8 animate-spin rounded-full border-4 border-emerald-600 border-t-transparent" /></div>;

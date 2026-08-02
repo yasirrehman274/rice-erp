@@ -5,6 +5,8 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import ProductDetails from "@/components/products/ProductDetails";
 import { productService } from "@/services/product.service";
+import { purchaseService } from "@/services/purchase.service";
+import { saleService } from "@/services/sale.service";
 import { useState, useEffect } from "react";
 import type { Product, ProductMovement } from "@/types/product";
 
@@ -15,16 +17,33 @@ export default function ViewProductPage({ params }: { params: Promise<{ id: stri
   const [id, setId] = useState("");
 
   useEffect(() => {
-    params.then(({ id: pid }) => {
+    let mounted = true;
+    params.then(async ({ id: pid }) => {
       setId(pid);
-      const p = productService.getById(pid);
-      setProduct(p);
-      if (p) {
-        const movements = productService.getProductMovements(p);
-        setPurchases(movements.purchases);
-        setSales(movements.sales);
+      try {
+        const [all] = await Promise.all([productService.refresh(), purchaseService.refresh(), saleService.refresh()]);
+        if (!mounted) return;
+        const p = all.find((item) => item.id === pid);
+        setProduct(p);
+        if (p) {
+          const movements = productService.getProductMovements(p);
+          setPurchases(movements.purchases);
+          setSales(movements.sales);
+        }
+      } catch {
+        if (!mounted) return;
+        const p = productService.getById(pid);
+        setProduct(p);
+        if (p) {
+          const movements = productService.getProductMovements(p);
+          setPurchases(movements.purchases);
+          setSales(movements.sales);
+        }
       }
     });
+    return () => {
+      mounted = false;
+    };
   }, [params]);
 
   if (product === undefined) return <div className="grid min-h-60 place-items-center"><div className="h-8 w-8 animate-spin rounded-full border-4 border-emerald-600 border-t-transparent" /></div>;

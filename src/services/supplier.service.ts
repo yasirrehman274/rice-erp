@@ -1,23 +1,44 @@
 import type { Supplier, SupplierLedgerEntry, SupplierPurchase, SupplierFormValues } from "@/types/supplier";
-import type { Purchase } from "@/types/purchase";
-import { getItem, setItem } from "@/lib/storage";
+import { getItem, setItem, ensureSeeded } from "@/lib/storage";
 import { seedAll } from "@/utils/seed";
-import { ensureSeeded } from "@/lib/storage";
+import { apiRequest } from "@/lib/api";
+import { purchaseService } from "./purchase.service";
 
 const KEY = "suppliers";
-const PURCHASES_KEY = "purchases";
 
-function ensure(): void { ensureSeeded(seedAll); }
+let cache: Supplier[] | null = null;
+let hydrated = false;
+let inFlight: Promise<Supplier[]> | null = null;
 
-function getAll(): Supplier[] { ensure(); return getItem<Supplier>(KEY) ?? []; }
+function ensure(): void {
+  ensureSeeded(seedAll);
+  if (cache === null) cache = getItem<Supplier>(KEY) ?? [];
+  hydrate();
+}
 
-function getById(id: string): Supplier | undefined { return getAll().find((s) => s.id === id); }
+function persist(): void {
+  setItem(KEY, cache ?? []);
+}
 
-function create(values: SupplierFormValues): Supplier {
-  const all = getAll();
-  const id = `sup-${String(all.length + 1).padStart(3, "0")}`;
+function hydrate(): void {
+  if (typeof window === "undefined" || hydrated) return;
+  hydrated = true;
+  void refresh().catch(() => {
+    hydrated = false;
+  });
+}
+
+function nextId(existing: Supplier[]): string {
+  const ids = new Set(existing.map((s) => s.id));
+  let n = 1;
+  while (ids.has(`sup-${String(n).padStart(3, "0")}`)) n += 1;
+  return `sup-${String(n).padStart(3, "0")}`;
+}
+
+function toSupplier(values: SupplierFormValues, id: string): Supplier {
   const now = new Date().toISOString().slice(0, 10);
-  const supplier: Supplier = {
+  const openingBalance = Number(values.openingBalance) || 0;
+  return {
     id,
     name: values.name,
     contactPerson: values.contactPerson,
@@ -28,8 +49,8 @@ function create(values: SupplierFormValues): Supplier {
     ntn: values.ntn,
     city: values.city,
     address: values.address,
-    openingBalance: Number(values.openingBalance) || 0,
-    currentBalance: Number(values.openingBalance) || 0,
+    openingBalance,
+    currentBalance: openingBalance,
     creditLimit: Number(values.creditLimit) || 0,
     status: values.status,
     notes: values.notes,
@@ -37,16 +58,133 @@ function create(values: SupplierFormValues): Supplier {
     totalPurchases: 0,
     totalPaid: 0,
   };
-  setItem(KEY, [...all, supplier]);
-  return supplier;
+}
+
+function replaceRecord(record: Supplier): void {
+  cache = [...(cache ?? []).filter((s) => s.id !== record.id), record];
+  persist();
+}
+
+function dropRecord(id: string): void {
+  cache = (cache ?? []).filter((s) => s.id !== id);
+  persist();
+}
+
+async function refresh(): Promise<Supplier[]> {
+  if (inFlight) return inFlight;
+  inFlight = doRefresh().finally(() => {
+    inFlight = null;
+  });
+  return inFlight;
+}
+
+async function doRefresh(): Promise<Supplier[]> {
+  let data = await apiRequest<Supplier[]>("/suppliers");
+  if (data.length === 0) {
+    const local = getItem<Supplier>(KEY) ?? [];
+    if (local.length > 0) {
+      let migrated = 0;
+      for (const item of local) {
+        try {
+          await apiRequest<Supplier>("/suppliers", { method: "POST", body: item });
+          migrated += 1;
+        } catch {
+          // Skip records that already exist on the server.
+        }
+      }
+      if (migrated > 0) data = await apiRequest<Supplier[]>("/suppliers");
+    }
+  }
+  if (data.length > 0) {
+    cache = data;
+    persist();
+  } else {
+    cache = getItem<Supplier>(KEY) ?? [];
+  }
+  return cache;
+}
+
+async function fetchById(id: string): Promise<Supplier | null> {
+  try {
+    return await apiRequest<Supplier>(`/suppliers/${encodeURIComponent(id)}`);
+  } catch (error) {
+    if (error instanceof Error && "status" in error && (error as { status: number }).status === 404) {
+      return null;
+    }
+    throw error;
+  }
+}
+
+async function fetchCreate(values: SupplierFormValues, id?: string): Promise<Supplier> {
+  ensure();
+  const recordId = id ?? nextId(cache ?? []);
+  const record = await apiRequest<Supplier>("/suppliers", {
+    method: "POST",
+    body: toSupplier(values, recordId),
+  });
+  replaceRecord(record);
+  return record;
+}
+
+async function fetchUpdate(id: string, values: SupplierFormValues): Promise<Supplier> {
+  ensure();
+  const existing = (cache ?? []).find((s) => s.id === id);
+  if (!existing) throw new Error("Supplier not found");
+  const record = await apiRequest<Supplier>(`/suppliers/${encodeURIComponent(id)}`, {
+    method: "PUT",
+    body: {
+      ...existing,
+      name: values.name,
+      contactPerson: values.contactPerson,
+      phone: values.phone,
+      whatsapp: values.whatsapp,
+      email: values.email,
+      cnic: values.cnic,
+      ntn: values.ntn,
+      city: values.city,
+      address: values.address,
+      openingBalance: Number(values.openingBalance) || 0,
+      creditLimit: Number(values.creditLimit) || 0,
+      status: values.status,
+      notes: values.notes,
+    },
+  });
+  replaceRecord(record);
+  return record;
+}
+
+async function fetchDelete(id: string): Promise<void> {
+  await apiRequest<void>(`/suppliers/${encodeURIComponent(id)}`, { method: "DELETE" });
+  dropRecord(id);
+}
+
+function getAll(): Supplier[] {
+  ensure();
+  return cache ?? [];
+}
+
+function getById(id: string): Supplier | undefined {
+  return getAll().find((s) => s.id === id);
+}
+
+function create(values: SupplierFormValues): Supplier {
+  ensure();
+  const optimistic = toSupplier(values, nextId(cache ?? []));
+  cache = [...(cache ?? []), optimistic];
+  persist();
+  void fetchCreate(values, optimistic.id)
+    .then((record) => replaceRecord(record))
+    .catch(() => dropRecord(optimistic.id));
+  return optimistic;
 }
 
 function update(id: string, values: SupplierFormValues): Supplier {
-  const all = getAll();
-  const idx = all.findIndex((s) => s.id === id);
+  ensure();
+  const idx = (cache ?? []).findIndex((s) => s.id === id);
   if (idx === -1) throw new Error("Supplier not found");
+  const previous = cache![idx];
   const updated: Supplier = {
-    ...all[idx],
+    ...previous,
     name: values.name,
     contactPerson: values.contactPerson,
     phone: values.phone,
@@ -61,14 +199,21 @@ function update(id: string, values: SupplierFormValues): Supplier {
     status: values.status,
     notes: values.notes,
   };
-  const next = [...all];
-  next[idx] = updated;
-  setItem(KEY, next);
+  cache![idx] = updated;
+  persist();
+  void fetchUpdate(id, values)
+    .then((record) => replaceRecord(record))
+    .catch(() => replaceRecord(previous));
   return updated;
 }
 
 function remove(id: string): void {
-  setItem(KEY, getAll().filter((s) => s.id !== id));
+  ensure();
+  const previous = (cache ?? []).find((s) => s.id === id);
+  dropRecord(id);
+  void fetchDelete(id).catch(() => {
+    if (previous) replaceRecord(previous);
+  });
 }
 
 function search(query: string): Supplier[] {
@@ -86,7 +231,7 @@ function count(predicate?: (s: Supplier) => boolean): number {
 }
 
 function getSupplierPurchases(supplier: Supplier): SupplierPurchase[] {
-  const purchases = getItem<Purchase>(PURCHASES_KEY) ?? [];
+  const purchases = purchaseService.getAll();
   return purchases
     .filter((p) => p.supplierId === supplier.id)
     .sort((a, b) => b.purchaseDate.localeCompare(a.purchaseDate))
@@ -102,7 +247,7 @@ function getSupplierPurchases(supplier: Supplier): SupplierPurchase[] {
 }
 
 function getSupplierLedger(supplier: Supplier): SupplierLedgerEntry[] {
-  const purchases = getItem<Purchase>(PURCHASES_KEY) ?? [];
+  const purchases = purchaseService.getAll();
   const supplierPurchases = purchases
     .filter((p) => p.supplierId === supplier.id)
     .sort((a, b) => a.purchaseDate.localeCompare(b.purchaseDate));
@@ -134,4 +279,9 @@ export const supplierService = {
   count,
   getSupplierPurchases,
   getSupplierLedger,
+  refresh,
+  fetchById,
+  fetchCreate,
+  fetchUpdate,
+  fetchDelete,
 };

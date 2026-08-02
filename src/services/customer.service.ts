@@ -1,23 +1,44 @@
 import type { Customer, CustomerLedgerEntry, CustomerOrder, CustomerFormValues } from "@/types/customer";
-import type { Sale } from "@/types/sale";
-import { getItem, setItem } from "@/lib/storage";
-import { ensureSeeded } from "@/lib/storage";
+import { getItem, setItem, ensureSeeded } from "@/lib/storage";
 import { seedAll } from "@/utils/seed";
+import { apiRequest } from "@/lib/api";
+import { saleService } from "./sale.service";
 
 const KEY = "customers";
-const SALES_KEY = "sales";
 
-function ensure(): void { ensureSeeded(seedAll); }
+let cache: Customer[] | null = null;
+let hydrated = false;
+let inFlight: Promise<Customer[]> | null = null;
 
-function getAll(): Customer[] { ensure(); return getItem<Customer>(KEY) ?? []; }
+function ensure(): void {
+  ensureSeeded(seedAll);
+  if (cache === null) cache = getItem<Customer>(KEY) ?? [];
+  hydrate();
+}
 
-function getById(id: string): Customer | undefined { return getAll().find((c) => c.id === id); }
+function persist(): void {
+  setItem(KEY, cache ?? []);
+}
 
-function create(values: CustomerFormValues): Customer {
-  const all = getAll();
-  const id = `cus-${String(all.length + 1).padStart(3, "0")}`;
+function hydrate(): void {
+  if (typeof window === "undefined" || hydrated) return;
+  hydrated = true;
+  void refresh().catch(() => {
+    hydrated = false;
+  });
+}
+
+function nextId(existing: Customer[]): string {
+  const ids = new Set(existing.map((c) => c.id));
+  let n = 1;
+  while (ids.has(`cus-${String(n).padStart(3, "0")}`)) n += 1;
+  return `cus-${String(n).padStart(3, "0")}`;
+}
+
+function toCustomer(values: CustomerFormValues, id: string): Customer {
   const now = new Date().toISOString().slice(0, 10);
-  const customer: Customer = {
+  const openingBalance = Number(values.openingBalance) || 0;
+  return {
     id,
     name: values.name,
     businessName: values.businessName,
@@ -28,8 +49,8 @@ function create(values: CustomerFormValues): Customer {
     ntn: values.ntn,
     city: values.city,
     address: values.address,
-    openingBalance: Number(values.openingBalance) || 0,
-    currentBalance: Number(values.openingBalance) || 0,
+    openingBalance,
+    currentBalance: openingBalance,
     creditLimit: Number(values.creditLimit) || 0,
     status: values.status,
     notes: values.notes,
@@ -37,16 +58,133 @@ function create(values: CustomerFormValues): Customer {
     totalOrders: 0,
     totalPayments: 0,
   };
-  setItem(KEY, [...all, customer]);
-  return customer;
+}
+
+function replaceRecord(record: Customer): void {
+  cache = [...(cache ?? []).filter((c) => c.id !== record.id), record];
+  persist();
+}
+
+function dropRecord(id: string): void {
+  cache = (cache ?? []).filter((c) => c.id !== id);
+  persist();
+}
+
+async function refresh(): Promise<Customer[]> {
+  if (inFlight) return inFlight;
+  inFlight = doRefresh().finally(() => {
+    inFlight = null;
+  });
+  return inFlight;
+}
+
+async function doRefresh(): Promise<Customer[]> {
+  let data = await apiRequest<Customer[]>("/customers");
+  if (data.length === 0) {
+    const local = getItem<Customer>(KEY) ?? [];
+    if (local.length > 0) {
+      let migrated = 0;
+      for (const item of local) {
+        try {
+          await apiRequest<Customer>("/customers", { method: "POST", body: item });
+          migrated += 1;
+        } catch {
+          // Skip records that already exist on the server.
+        }
+      }
+      if (migrated > 0) data = await apiRequest<Customer[]>("/customers");
+    }
+  }
+  if (data.length > 0) {
+    cache = data;
+    persist();
+  } else {
+    cache = getItem<Customer>(KEY) ?? [];
+  }
+  return cache;
+}
+
+async function fetchById(id: string): Promise<Customer | null> {
+  try {
+    return await apiRequest<Customer>(`/customers/${encodeURIComponent(id)}`);
+  } catch (error) {
+    if (error instanceof Error && "status" in error && (error as { status: number }).status === 404) {
+      return null;
+    }
+    throw error;
+  }
+}
+
+async function fetchCreate(values: CustomerFormValues, id?: string): Promise<Customer> {
+  ensure();
+  const recordId = id ?? nextId(cache ?? []);
+  const record = await apiRequest<Customer>("/customers", {
+    method: "POST",
+    body: toCustomer(values, recordId),
+  });
+  replaceRecord(record);
+  return record;
+}
+
+async function fetchUpdate(id: string, values: CustomerFormValues): Promise<Customer> {
+  ensure();
+  const existing = (cache ?? []).find((c) => c.id === id);
+  if (!existing) throw new Error("Customer not found");
+  const record = await apiRequest<Customer>(`/customers/${encodeURIComponent(id)}`, {
+    method: "PUT",
+    body: {
+      ...existing,
+      name: values.name,
+      businessName: values.businessName,
+      phone: values.phone,
+      whatsapp: values.whatsapp,
+      email: values.email,
+      cnic: values.cnic,
+      ntn: values.ntn,
+      city: values.city,
+      address: values.address,
+      openingBalance: Number(values.openingBalance) || 0,
+      creditLimit: Number(values.creditLimit) || 0,
+      status: values.status,
+      notes: values.notes,
+    },
+  });
+  replaceRecord(record);
+  return record;
+}
+
+async function fetchDelete(id: string): Promise<void> {
+  await apiRequest<void>(`/customers/${encodeURIComponent(id)}`, { method: "DELETE" });
+  dropRecord(id);
+}
+
+function getAll(): Customer[] {
+  ensure();
+  return cache ?? [];
+}
+
+function getById(id: string): Customer | undefined {
+  return getAll().find((c) => c.id === id);
+}
+
+function create(values: CustomerFormValues): Customer {
+  ensure();
+  const optimistic = toCustomer(values, nextId(cache ?? []));
+  cache = [...(cache ?? []), optimistic];
+  persist();
+  void fetchCreate(values, optimistic.id)
+    .then((record) => replaceRecord(record))
+    .catch(() => dropRecord(optimistic.id));
+  return optimistic;
 }
 
 function update(id: string, values: CustomerFormValues): Customer {
-  const all = getAll();
-  const idx = all.findIndex((c) => c.id === id);
+  ensure();
+  const idx = (cache ?? []).findIndex((c) => c.id === id);
   if (idx === -1) throw new Error("Customer not found");
+  const previous = cache![idx];
   const updated: Customer = {
-    ...all[idx],
+    ...previous,
     name: values.name,
     businessName: values.businessName,
     phone: values.phone,
@@ -61,14 +199,21 @@ function update(id: string, values: CustomerFormValues): Customer {
     status: values.status,
     notes: values.notes,
   };
-  const next = [...all];
-  next[idx] = updated;
-  setItem(KEY, next);
+  cache![idx] = updated;
+  persist();
+  void fetchUpdate(id, values)
+    .then((record) => replaceRecord(record))
+    .catch(() => replaceRecord(previous));
   return updated;
 }
 
 function remove(id: string): void {
-  setItem(KEY, getAll().filter((c) => c.id !== id));
+  ensure();
+  const previous = (cache ?? []).find((c) => c.id === id);
+  dropRecord(id);
+  void fetchDelete(id).catch(() => {
+    if (previous) replaceRecord(previous);
+  });
 }
 
 function search(query: string): Customer[] {
@@ -86,7 +231,7 @@ function count(predicate?: (c: Customer) => boolean): number {
 }
 
 function getCustomerOrders(customer: Customer): CustomerOrder[] {
-  const sales = getItem<Sale>(SALES_KEY) ?? [];
+  const sales = saleService.getAll();
   return sales
     .filter((s) => s.customerId === customer.id)
     .sort((a, b) => b.saleDate.localeCompare(a.saleDate))
@@ -102,7 +247,7 @@ function getCustomerOrders(customer: Customer): CustomerOrder[] {
 }
 
 function getCustomerLedger(customer: Customer): CustomerLedgerEntry[] {
-  const sales = getItem<Sale>(SALES_KEY) ?? [];
+  const sales = saleService.getAll();
   const customerSales = sales
     .filter((s) => s.customerId === customer.id)
     .sort((a, b) => a.saleDate.localeCompare(b.saleDate));
@@ -134,4 +279,9 @@ export const customerService = {
   count,
   getCustomerOrders,
   getCustomerLedger,
+  refresh,
+  fetchById,
+  fetchCreate,
+  fetchUpdate,
+  fetchDelete,
 };

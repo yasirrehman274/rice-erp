@@ -9,7 +9,7 @@ import type { SaleHistoryEntry } from "@/types/sale";
 
 export default function SaleHistoryPage() {
   const [history, setHistory] = useState<SaleHistoryEntry[]>([]);
-  useEffect(() => { setHistory(saleService.getSaleHistory()); }, []);
+  useEffect(() => { let mounted = true; saleService.refresh().then(() => { if (mounted) setHistory(saleService.getSaleHistory()); }).catch(() => { if (mounted) setHistory(saleService.getSaleHistory()); }); return () => { mounted = false; }; }, []);
 
   return <div>
     <Link href="/sales" className="mb-4 inline-flex items-center gap-1 text-sm font-semibold text-slate-500 hover:text-emerald-600"><ChevronLeft size={17} />Back to sales</Link>
