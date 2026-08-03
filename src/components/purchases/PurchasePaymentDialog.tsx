@@ -2,10 +2,11 @@
 
 import { DollarSign, X } from "lucide-react";
 import { useState } from "react";
-import type { Purchase, PurchasePaymentMethod } from "@/types/purchase";
+import type { Purchase, PurchasePayment, PurchasePaymentMethod } from "@/types/purchase";
 
 interface PurchasePaymentDialogProps {
   purchase: Purchase | null;
+  payment?: PurchasePayment | null;
   open: boolean;
   onClose: () => void;
   onConfirm: (
@@ -17,20 +18,36 @@ interface PurchasePaymentDialogProps {
 
 export default function PurchasePaymentDialog({
   purchase,
+  payment,
   open,
   onClose,
   onConfirm,
 }: PurchasePaymentDialogProps) {
-  const [amount, setAmount] = useState("");
-  const [method, setMethod] = useState<PurchasePaymentMethod>("cash");
-  const [notes, setNotes] = useState("");
+  const [amount, setAmount] = useState(payment ? String(payment.amount) : "");
+  const [method, setMethod] = useState<PurchasePaymentMethod>(payment?.method ?? "cash");
+  const [notes, setNotes] = useState(payment?.notes ?? "");
 
   if (!open || !purchase) return null;
+
+  const editing = Boolean(payment);
+  const maxAmount = payment ? purchase.remainingBalance + payment.amount : purchase.remainingBalance;
+  const enteredAmount = Number(amount) || 0;
+  const remainingAfterPayment = Math.max(0, purchase.remainingBalance - (enteredAmount - (payment?.amount ?? 0)));
+
+  function updateAmount(value: string) {
+    if (value === "") {
+      setAmount("");
+      return;
+    }
+    const numericValue = Number(value);
+    if (!Number.isFinite(numericValue)) return;
+    setAmount(String(Math.min(Math.max(0, numericValue), maxAmount)));
+  }
 
   function submit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const numAmount = Number(amount);
-    if (!numAmount || numAmount <= 0) return;
+    if (!numAmount || numAmount <= 0 || numAmount > maxAmount) return;
     onConfirm(numAmount, method, notes);
     setAmount("");
     setNotes("");
@@ -55,7 +72,7 @@ export default function PurchasePaymentDialog({
             <X size={20} />
           </button>
         </div>
-        <h2 className="mt-4 text-lg font-bold">Record payment</h2>
+        <h2 className="mt-4 text-lg font-bold">{editing ? "Edit payment" : "Record payment"}</h2>
         <p className="mt-2 text-sm text-slate-500">
           Payment for{" "}
           <span className="font-semibold text-slate-700 dark:text-slate-200">
@@ -80,12 +97,15 @@ export default function PurchasePaymentDialog({
             <input
               type="number"
               min="1"
-              max={purchase.remainingBalance}
+              max={maxAmount}
               value={amount}
-              onChange={(event) => setAmount(event.target.value)}
+              onChange={(event) => updateAmount(event.target.value)}
               placeholder="0"
               className="h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm outline-none focus:border-emerald-500 focus:ring-4 focus:ring-emerald-500/10 dark:border-slate-700 dark:bg-slate-800"
             />
+            <span className="mt-2 block text-xs text-slate-500">
+              Outstanding after payment: <span className="font-semibold text-emerald-600">Rs. {new Intl.NumberFormat("en-PK").format(remainingAfterPayment)}</span>
+            </span>
           </label>
           <label>
             <span className="mb-2 block text-sm font-medium">
@@ -127,7 +147,7 @@ export default function PurchasePaymentDialog({
               className="inline-flex items-center gap-2 rounded-xl bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-emerald-700"
             >
               <DollarSign size={16} />
-              Record payment
+              {editing ? "Update payment" : "Record payment"}
             </button>
           </div>
         </form>

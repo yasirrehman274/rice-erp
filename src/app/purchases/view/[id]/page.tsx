@@ -20,12 +20,12 @@ export default function PurchaseViewPage({ params }: { params: Promise<{ id: str
         if (!mounted) return;
         const p = all.find((item) => item.id === id);
         setPurchase(p);
-        if (p) setPayments(purchaseService.getPurchasePayments(p));
+        if (p) setPayments(await purchaseService.fetchPurchasePayments(p.id));
       } catch {
         if (!mounted) return;
         const p = purchaseService.getById(id);
         setPurchase(p);
-        if (p) setPayments(purchaseService.getPurchasePayments(p));
+        if (p) setPayments(await purchaseService.fetchPurchasePayments(p.id));
       }
     });
     return () => {

@@ -8,7 +8,7 @@ import type { Sale, SaleStatus, SalePaymentStatus } from "@/types/sale";
 import DeleteSaleDialog from "./DeleteSaleDialog";
 import { saleService } from "@/services/sale.service";
 import SaleCard from "./SaleCard";
-import { SaleStatusBadge, SalePaymentBadge } from "./SaleStatusBadge";
+import { SalePaymentBadge } from "./SaleStatusBadge";
 
 const pageSize = 8;
 type SortKey = "saleNumber" | "customerName" | "productName" | "quantity" | "grandTotal" | "remainingBalance" | "saleDate";
@@ -66,6 +66,7 @@ export default function SaleTable({ initialSales }: { initialSales: Sale[] }) {
             <option value="pending">Pending</option>
             <option value="dispatched">Dispatched</option>
             <option value="partial">Partial</option>
+            <option value="paid">Paid</option>
             <option value="cancelled">Cancelled</option>
           </select>
           <select value={paymentStatus} onChange={(event) => { setPaymentStatus(event.target.value as "all" | SalePaymentStatus); setPage(1); }} className="h-10 rounded-xl border border-slate-200 bg-white px-3 text-sm outline-none focus:border-emerald-500 dark:border-slate-700 dark:bg-slate-800">
@@ -78,7 +79,7 @@ export default function SaleTable({ initialSales }: { initialSales: Sale[] }) {
       </div>
       {visible.length === 0 ? <div className="grid min-h-80 place-items-center p-8 text-center"><div><Search className="mx-auto text-slate-300" size={38} /><h2 className="mt-4 font-semibold">No sales found</h2><p className="mt-1 text-sm text-slate-500">Try adjusting your search or filter.</p><button onClick={resetFilters} className="mt-4 text-sm font-semibold text-emerald-600">Clear filters</button></div></div> : <>
         <div className="hidden overflow-x-auto lg:block">
-          <table className="w-full min-w-[1300px] text-left text-sm">
+          <table className="w-full min-w-[1200px] text-left text-sm">
             <thead className="bg-slate-50 text-xs uppercase tracking-wide text-slate-500 dark:bg-slate-800/40">
               <tr>
                 <th className="cursor-pointer px-6 py-3 select-none" onClick={() => changeSort("saleNumber")}>Sale No{sortIcon("saleNumber")}</th>
@@ -88,7 +89,6 @@ export default function SaleTable({ initialSales }: { initialSales: Sale[] }) {
                 <th className="cursor-pointer px-4 py-3 text-right select-none" onClick={() => changeSort("grandTotal")}>Total Amount{sortIcon("grandTotal")}</th>
                 <th className="px-4 py-3 text-right">Received</th>
                 <th className="cursor-pointer px-4 py-3 text-right select-none" onClick={() => changeSort("remainingBalance")}>Remaining{sortIcon("remainingBalance")}</th>
-                <th className="px-4 py-3">Status</th>
                 <th className="px-4 py-3">Payment</th>
                 <th className="cursor-pointer px-4 py-3 select-none" onClick={() => changeSort("saleDate")}>Date{sortIcon("saleDate")}</th>
                 <th className="px-6 py-3 text-right">Actions</th>
@@ -103,7 +103,6 @@ export default function SaleTable({ initialSales }: { initialSales: Sale[] }) {
                 <td className="px-4 py-4 text-right font-medium">{formatCurrency(sale.grandTotal)}</td>
                 <td className="px-4 py-4 text-right text-emerald-600">{formatCurrency(sale.receivedAmount)}</td>
                 <td className="px-4 py-4 text-right text-rose-600">{formatCurrency(sale.remainingBalance)}</td>
-                <td className="px-4 py-4"><SaleStatusBadge status={sale.status} /></td>
                 <td className="px-4 py-4"><SalePaymentBadge status={sale.paymentStatus} /></td>
                 <td className="px-4 py-4 text-slate-500">{formatDate(sale.saleDate)}</td>
                 <td className="px-6 py-4">

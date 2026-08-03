@@ -16,7 +16,7 @@ export default function SalePaymentDialog({ sale, open, onClose, onConfirm }: Sa
   const enteredAmount = Number(amount) || 0;
   const remainingAfterPayment = Math.max(0, sale.remainingBalance - enteredAmount);
 
-  function updateAmount(value: string) {
+  const updateAmount = (value: string) => {
     if (value === "") {
       setAmount("");
       return;
@@ -24,16 +24,16 @@ export default function SalePaymentDialog({ sale, open, onClose, onConfirm }: Sa
     const numericValue = Number(value);
     if (!Number.isFinite(numericValue)) return;
     setAmount(String(Math.min(Math.max(0, numericValue), sale.remainingBalance)));
-  }
+  };
 
-  function submit(event: React.FormEvent<HTMLFormElement>) {
+  const submit = (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     const numAmount = Number(amount);
     if (!numAmount || numAmount <= 0 || numAmount > sale.remainingBalance) return;
     onConfirm(numAmount, method, notes);
     setAmount("");
     setNotes("");
-  }
+  };
 
   return <div className="fixed inset-0 z-50 grid place-items-center bg-slate-950/50 p-4" role="dialog" aria-modal="true"><div className="w-full max-w-lg rounded-2xl bg-white p-6 shadow-2xl dark:bg-slate-900">
     <div className="flex items-start justify-between"><span className="grid size-11 place-items-center rounded-xl bg-emerald-100 text-emerald-600 dark:bg-emerald-500/15"><DollarSign size={22} /></span><button onClick={onClose} className="rounded-lg p-1 text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800" aria-label="Close dialog"><X size={20} /></button></div>

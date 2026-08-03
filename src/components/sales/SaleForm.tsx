@@ -6,31 +6,31 @@ import { useRouter } from "next/navigation";
 import type { Customer } from "@/types/customer";
 import type { Product } from "@/types/product";
 import type { Warehouse } from "@/types/warehouse";
-import type { Sale, SaleFormValues } from "@/types/sale";
+import type { Sale, SaleFormValues, SaleItemForm } from "@/types/sale";
 import { customerService } from "@/services/customer.service";
 import { inventoryService } from "@/services/inventory.service";
 import { productService } from "@/services/product.service";
 import { saleService } from "@/services/sale.service";
 import { warehouseService } from "@/services/warehouse.service";
 
+let itemSeq = 0;
+
+function newItem(): SaleItemForm {
+  itemSeq += 1;
+  return { id: `itm-${Date.now()}-${itemSeq}`, productId: "", quantity: "1", bagWeight: "", currentSalePrice: "" };
+}
+
 const emptyValues: SaleFormValues = {
   saleNumber: "",
   saleDate: "",
   customerId: "",
   warehouseId: "",
-  productId: "",
+  items: [newItem()],
   batchNumber: "",
   riceVariety: "",
-  quantity: "1",
-  bagWeight: "",
-  totalWeight: "",
-  currentSalePrice: "",
-  saleRate: "",
-  subtotal: "",
   discount: "",
   transportCharges: "",
   otherCharges: "",
-  grandTotal: "",
   receivedAmount: "",
   paymentMethod: "cash",
   status: "pending",
@@ -47,24 +47,35 @@ function toFormValues(sale?: Sale): SaleFormValues {
       saleNumber: `SAL-${1285 + Math.floor(Math.random() * 100)}`,
       saleDate: new Date().toISOString().slice(0, 10),
     };
+  const items: SaleItemForm[] =
+    sale.items && sale.items.length > 0
+      ? sale.items.map((item) => ({
+          id: item.id,
+          productId: item.productId,
+          quantity: String(item.quantity),
+          bagWeight: String(item.bagWeight),
+          currentSalePrice: String(item.currentSalePrice),
+        }))
+      : [
+          {
+            id: `itm-${sale.id}-1`,
+            productId: sale.productId,
+            quantity: String(sale.quantity),
+            bagWeight: String(sale.bagWeight),
+            currentSalePrice: String(sale.currentSalePrice),
+          },
+        ];
   return {
     saleNumber: sale.saleNumber,
     saleDate: sale.saleDate,
     customerId: sale.customerId,
     warehouseId: sale.warehouseId,
-    productId: sale.productId,
+    items,
     batchNumber: sale.batchNumber,
     riceVariety: sale.riceVariety,
-    quantity: String(sale.quantity),
-    bagWeight: String(sale.bagWeight),
-    totalWeight: String(sale.totalWeight),
-    currentSalePrice: String(sale.currentSalePrice),
-    saleRate: String(sale.saleRate),
-    subtotal: String(sale.subtotal),
     discount: String(sale.discount),
     transportCharges: String(sale.transportCharges),
     otherCharges: String(sale.otherCharges),
-    grandTotal: String(sale.grandTotal),
     receivedAmount: String(sale.receivedAmount),
     paymentMethod: sale.paymentMethod,
     status: sale.status,
@@ -82,9 +93,7 @@ export default function SaleForm({ sale }: { sale?: Sale }) {
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
   const [warehouses, setWarehouses] = useState<Warehouse[]>([]);
-  const [errors, setErrors] = useState<
-    Partial<Record<keyof SaleFormValues, string>>
-  >({});
+  const [errors, setErrors] = useState<Record<string, string>>({});
   const [saved, setSaved] = useState(false);
 
   useEffect(() => {
@@ -98,55 +107,86 @@ export default function SaleForm({ sale }: { sale?: Sale }) {
   const selectedCustomer = customers.find(
     (customer) => customer.id === values.customerId,
   );
-  const stock =
-    values.productId && values.warehouseId
-      ? (inventoryService.getByProductAndWarehouse(
-          values.productId,
-          values.warehouseId,
-        )?.availableStock ?? 0)
-      : 0;
   const totals = useMemo(() => {
-    const quantity = Number(values.quantity) || 0;
-    const price = Number(values.currentSalePrice) || 0;
-    const subtotal = quantity * price;
+    const subtotal = values.items.reduce((sum, item) => {
+      const quantity = Number(item.quantity) || 0;
+      const price = Number(item.currentSalePrice) || 0;
+      return sum + quantity * price;
+    }, 0);
     const discount = Number(values.discount) || 0;
     const shipping = Number(values.transportCharges) || 0;
     const other = Number(values.otherCharges) || 0;
     return { subtotal, grandTotal: subtotal - discount + shipping + other };
   }, [
-    values.quantity,
-    values.currentSalePrice,
+    values.items,
     values.discount,
     values.transportCharges,
     values.otherCharges,
   ]);
 
   function update(key: keyof SaleFormValues, value: string) {
+    setValues((current) => ({ ...current, [key]: value }));
+    if (errors[key]) setErrors((current) => ({ ...current, [key]: "" }));
+  }
+
+  function updateItem(index: number, key: keyof SaleItemForm, value: string) {
     setValues((current) => {
-      const next = { ...current, [key]: value };
-      if (key === "productId") {
-        const product = products.find((item) => item.id === value);
-        if (product) {
-          next.bagWeight = product.bagWeight.replace(/[^\d.]/g, "");
-          next.currentSalePrice = String(product.suggestedSalePrice);
-          next.riceVariety = product.variety;
+      const items = current.items.map((item, i) => {
+        if (i !== index) return item;
+        const next = { ...item, [key]: value };
+        if (key === "productId") {
+          const product = products.find((item) => item.id === value);
+          if (product) {
+            next.bagWeight = product.bagWeight.replace(/[^\d.]/g, "");
+            next.currentSalePrice = String(product.suggestedSalePrice);
+          }
         }
-      }
-      return next;
+        return next;
+      });
+      return { ...current, items };
     });
-    if (errors[key]) setErrors((current) => ({ ...current, [key]: undefined }));
+    setErrors((current) => ({ ...current, items: "" }));
+  }
+
+  function addItem() {
+    setValues((current) => ({ ...current, items: [...current.items, newItem()] }));
+    setErrors((current) => ({ ...current, items: "" }));
+  }
+
+  function removeItem(index: number) {
+    setValues((current) => {
+      const items = current.items.filter((_, i) => i !== index);
+      return { ...current, items: items.length > 0 ? items : [newItem()] };
+    });
+  }
+
+  function itemStock(item: SaleItemForm): number {
+    if (!item.productId || !values.warehouseId) return 0;
+    return (
+      inventoryService.getByProductAndWarehouse(
+        item.productId,
+        values.warehouseId,
+      )?.availableStock ?? 0
+    );
   }
 
   function submit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    const nextErrors: Partial<Record<keyof SaleFormValues, string>> = {};
+    const nextErrors: Record<string, string> = {};
     if (!values.customerId) nextErrors.customerId = "Customer is required.";
     if (!values.warehouseId) nextErrors.warehouseId = "Sold at is required.";
-    if (!values.productId) nextErrors.productId = "Please select a product.";
-    if ((Number(values.quantity) || 0) <= 0)
-      nextErrors.quantity = "Quantity must be greater than zero.";
-    if ((Number(values.currentSalePrice) || 0) <= 0)
-      nextErrors.currentSalePrice = "Price is required.";
+    if (values.items.length === 0) nextErrors.items = "Add at least one item.";
+    const invalidIndex = values.items.findIndex((item) => {
+      if (!item.productId) return true;
+      if ((Number(item.quantity) || 0) <= 0) return true;
+      if ((Number(item.currentSalePrice) || 0) <= 0) return true;
+      return false;
+    });
+    if (invalidIndex !== -1) {
+      const item = values.items[invalidIndex];
+      nextErrors.items = `Item ${invalidIndex + 1} needs a product, a quantity above zero and a valid price.`;
+      if (!item.productId) nextErrors[`item-${item.id}-product`] = "Select a product.";
+    }
     if ((Number(values.receivedAmount) || 0) < 0)
       nextErrors.receivedAmount = "Received amount cannot be negative.";
     if ((Number(values.receivedAmount) || 0) > totals.grandTotal)
@@ -156,16 +196,6 @@ export default function SaleForm({ sale }: { sale?: Sale }) {
 
     const finalValues: SaleFormValues = {
       ...values,
-      totalWeight: String(
-        (Number(values.quantity) || 0) * (Number(values.bagWeight) || 0),
-      ),
-      saleRate: String(
-        Number(values.bagWeight)
-          ? (Number(values.currentSalePrice) || 0) / Number(values.bagWeight)
-          : 0,
-      ),
-      subtotal: String(totals.subtotal),
-      grandTotal: String(totals.grandTotal),
       receivedAmount:
         values.receivedAmount ||
         (values.status === "dispatched" ? String(totals.grandTotal) : "0"),
@@ -180,8 +210,7 @@ export default function SaleForm({ sale }: { sale?: Sale }) {
       );
     } catch (error) {
       setErrors({
-        productId:
-          error instanceof Error ? error.message : "Unable to save sale.",
+        items: error instanceof Error ? error.message : "Unable to save sale.",
       });
     }
   }
@@ -260,103 +289,105 @@ export default function SaleForm({ sale }: { sale?: Sale }) {
             <span>Total ↕</span>
             <span className="text-center">Action</span>
           </div>
-          <div className="grid gap-4 px-5 py-5 lg:grid-cols-[minmax(260px,2.2fr)_0.75fr_0.8fr_0.75fr_0.9fr_64px] lg:items-center">
-            <label className="block lg:hidden">
-              <span className="mb-2 block text-sm font-medium">Product</span>
-            </label>
-            <div>
-              <select
-                id="sale-product"
-                value={values.productId}
-                onChange={(event) => update("productId", event.target.value)}
-                className={inputClass}
-              >
-                <option value="">Search product…</option>
-                {products
-                  .filter((product) => product.status === "active")
-                  .map((product) => (
-                    <option key={product.id} value={product.id}>
-                      {product.productName}
-                    </option>
-                  ))}
-              </select>
-              {errors.productId && (
-                <span className="mt-1 block text-xs text-rose-600">
-                  {errors.productId}
-                </span>
-              )}
-            </div>
-            <div>
-              <span className="mb-1 block text-xs font-medium text-slate-500 lg:hidden">
-                Stock
-              </span>
-              <p className="text-sm font-medium">{stock.toLocaleString()}</p>
-            </div>
-            <div>
-              <span className="mb-1 block text-xs font-medium text-slate-500 lg:hidden">
-                Price
-              </span>
-              <input
-                type="number"
-                min="0"
-                value={values.currentSalePrice}
-                onChange={(event) =>
-                  update("currentSalePrice", event.target.value)
-                }
-                placeholder="0"
-                className={inputClass}
-              />
-              {errors.currentSalePrice && (
-                <span className="mt-1 block text-xs text-rose-600">
-                  {errors.currentSalePrice}
-                </span>
-              )}
-            </div>
-            <div>
-              <span className="mb-1 block text-xs font-medium text-slate-500 lg:hidden">
-                Quantity
-              </span>
-              <input
-                type="number"
-                min="1"
-                value={values.quantity}
-                onChange={(event) => update("quantity", event.target.value)}
-                className={inputClass}
-              />
-              {errors.quantity && (
-                <span className="mt-1 block text-xs text-rose-600">
-                  {errors.quantity}
-                </span>
-              )}
-            </div>
-            <div>
-              <span className="mb-1 block text-xs font-medium text-slate-500 lg:hidden">
-                Total
-              </span>
-              <p className="text-sm font-semibold">
-                {currency(totals.subtotal)}
-              </p>
-            </div>
-            <button
-              type="button"
-              onClick={() => {
-                update("productId", "");
-                update("currentSalePrice", "");
-              }}
-              className="justify-self-start rounded-lg p-2 text-rose-500 hover:bg-rose-50 lg:justify-self-center"
-              aria-label="Clear item"
+          {values.items.map((item, index) => (
+            <div
+              key={item.id}
+              className="grid gap-4 border-b border-slate-100 px-5 py-5 last:border-0 lg:grid-cols-[minmax(260px,2.2fr)_0.75fr_0.8fr_0.75fr_0.9fr_64px] lg:items-center dark:border-slate-800"
             >
-              <Trash2 size={19} />
-            </button>
-          </div>
+              <label className="block lg:hidden">
+                <span className="mb-2 block text-sm font-medium">
+                  Product {index + 1}
+                </span>
+              </label>
+              <div>
+                <select
+                  id={`sale-product-${item.id}`}
+                  value={item.productId}
+                  onChange={(event) =>
+                    updateItem(index, "productId", event.target.value)
+                  }
+                  className={inputClass}
+                >
+                  <option value="">Search product…</option>
+                  {products
+                    .filter((product) => product.status === "active")
+                    .map((product) => (
+                      <option key={product.id} value={product.id}>
+                        {product.productName}
+                      </option>
+                    ))}
+                </select>
+                {errors[`item-${item.id}-product`] && (
+                  <span className="mt-1 block text-xs text-rose-600">
+                    {errors[`item-${item.id}-product`]}
+                  </span>
+                )}
+              </div>
+              <div>
+                <span className="mb-1 block text-xs font-medium text-slate-500 lg:hidden">
+                  Stock
+                </span>
+                <p className="text-sm font-medium">{itemStock(item).toLocaleString()}</p>
+              </div>
+              <div>
+                <span className="mb-1 block text-xs font-medium text-slate-500 lg:hidden">
+                  Price
+                </span>
+                <input
+                  type="number"
+                  min="0"
+                  value={item.currentSalePrice}
+                  onChange={(event) =>
+                    updateItem(index, "currentSalePrice", event.target.value)
+                  }
+                  placeholder="0"
+                  className={inputClass}
+                />
+              </div>
+              <div>
+                <span className="mb-1 block text-xs font-medium text-slate-500 lg:hidden">
+                  Quantity
+                </span>
+                <input
+                  type="number"
+                  min="1"
+                  value={item.quantity}
+                  onChange={(event) =>
+                    updateItem(index, "quantity", event.target.value)
+                  }
+                  className={inputClass}
+                />
+              </div>
+              <div>
+                <span className="mb-1 block text-xs font-medium text-slate-500 lg:hidden">
+                  Total
+                </span>
+                <p className="text-sm font-semibold">
+                  {currency(
+                    (Number(item.quantity) || 0) *
+                      (Number(item.currentSalePrice) || 0),
+                  )}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => removeItem(index)}
+                disabled={values.items.length === 1}
+                className="justify-self-start rounded-lg p-2 text-rose-500 hover:bg-rose-50 disabled:opacity-30 lg:justify-self-center"
+                aria-label={`Remove item ${index + 1}`}
+              >
+                <Trash2 size={19} />
+              </button>
+            </div>
+          ))}
         </div>
-        <p className="mt-2 text-xs text-slate-500">
-          Each sale currently supports one product item.
-        </p>
+        {errors.items && (
+          <p className="mt-2 text-xs text-rose-600">{errors.items}</p>
+        )}
         <button
           type="button"
-          onClick={() => document.getElementById("sale-product")?.focus()}
-          className="mt-5 inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold shadow-sm hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900"
+          onClick={addItem}
+          className="mt-5 inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold shadow-sm hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:hover:bg-slate-800"
         >
           <Plus size={17} />
           Add Item
@@ -416,7 +447,7 @@ export default function SaleForm({ sale }: { sale?: Sale }) {
           </label>
           <label>
             <span className="mb-2 block text-sm font-medium">
-              Payment Status
+              Sale Status
             </span>
             <select
               value={values.status}
@@ -425,7 +456,8 @@ export default function SaleForm({ sale }: { sale?: Sale }) {
             >
               <option value="pending">Pending</option>
               <option value="partial">Partial</option>
-              <option value="dispatched">Paid</option>
+              <option value="paid">Paid</option>
+              <option value="dispatched">Dispatched</option>
               <option value="cancelled">Cancelled</option>
             </select>
           </label>

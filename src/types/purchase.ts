@@ -25,6 +25,7 @@ export interface Purchase {
   otherCharges: number;
   grandTotal: number;
   paidAmount: number;
+  payments?: PurchasePayment[];
   remainingBalance: number;
   paymentMethod: PurchasePaymentMethod;
   status: PurchaseStatus;
@@ -68,6 +69,9 @@ export interface PurchasePayment {
   method: PurchasePaymentMethod;
   reference: string;
   notes: string;
+  createdBy?: string;
+  createdAt?: string;
+  updatedAt?: string;
 }
 
 export interface PurchaseHistoryEntry {

@@ -1,4 +1,4 @@
-import type { Sale, SalePayment, SaleHistoryEntry, SaleFormValues } from "@/types/sale";
+import type { Sale, SalePayment, SaleHistoryEntry, SaleFormValues, SaleItem } from "@/types/sale";
 import { getItem, setItem, ensureSeeded } from "@/lib/storage";
 import { seedAll } from "@/utils/seed";
 import { apiRequest } from "@/lib/api";
@@ -38,18 +38,41 @@ function nextId(existing: Sale[]): string {
   return `sal-${String(n).padStart(3, "0")}`;
 }
 
-function resolveNames(values: SaleFormValues): { customerName: string; warehouseName: string; productName: string } {
+function resolveNames(values: SaleFormValues): { customerName: string; warehouseName: string } {
   const customer = customerService.getById(values.customerId);
   const warehouse = warehouseService.getById(values.warehouseId);
-  const product = productService.getById(values.productId);
-  return { customerName: customer?.name ?? "", warehouseName: warehouse?.name ?? "", productName: product?.productName ?? "" };
+  return { customerName: customer?.name ?? "", warehouseName: warehouse?.name ?? "" };
+}
+
+function toSaleItems(values: SaleFormValues): SaleItem[] {
+  return values.items.map((item) => {
+    const quantity = Number(item.quantity) || 0;
+    const bagWeight = Number(item.bagWeight) || 0;
+    const price = Number(item.currentSalePrice) || 0;
+    const product = productService.getById(item.productId);
+    return {
+      id: item.id,
+      productId: item.productId,
+      productName: product?.productName ?? "",
+      quantity,
+      bagWeight,
+      totalWeight: quantity * bagWeight,
+      currentSalePrice: price,
+      saleRate: bagWeight ? price / bagWeight : 0,
+      subtotal: quantity * price,
+    };
+  });
 }
 
 function toSale(values: SaleFormValues, id: string): Sale {
   const now = new Date().toISOString().slice(0, 10);
   const names = resolveNames(values);
-  const grandTotal = Number(values.grandTotal) || 0;
+  const items = toSaleItems(values);
+  const subtotal = items.reduce((sum, item) => sum + item.subtotal, 0);
+  const grandTotal = subtotal - (Number(values.discount) || 0) + (Number(values.transportCharges) || 0) + (Number(values.otherCharges) || 0);
   const receivedAmount = Number(values.receivedAmount) || 0;
+  const status = values.status === "cancelled" ? "cancelled" : receivedAmount >= grandTotal && grandTotal > 0 ? "paid" : receivedAmount > 0 ? "partial" : values.status;
+  const first = items[0];
   return {
     id,
     saleNumber: values.saleNumber,
@@ -58,16 +81,17 @@ function toSale(values: SaleFormValues, id: string): Sale {
     customerName: names.customerName,
     warehouseId: values.warehouseId,
     warehouseName: names.warehouseName,
-    productId: values.productId,
-    productName: names.productName,
+    productId: first.productId,
+    productName: first.productName,
     batchNumber: values.batchNumber,
     riceVariety: values.riceVariety,
-    quantity: Number(values.quantity) || 0,
-    bagWeight: Number(values.bagWeight) || 0,
-    totalWeight: Number(values.totalWeight) || 0,
-    currentSalePrice: Number(values.currentSalePrice) || 0,
-    saleRate: Number(values.saleRate) || 0,
-    subtotal: Number(values.subtotal) || 0,
+    quantity: first.quantity,
+    bagWeight: first.bagWeight,
+    totalWeight: first.totalWeight,
+    currentSalePrice: first.currentSalePrice,
+    saleRate: first.saleRate,
+    subtotal,
+    items,
     discount: Number(values.discount) || 0,
     transportCharges: Number(values.transportCharges) || 0,
     otherCharges: Number(values.otherCharges) || 0,
@@ -75,7 +99,7 @@ function toSale(values: SaleFormValues, id: string): Sale {
     receivedAmount,
     remainingBalance: grandTotal - receivedAmount,
     paymentMethod: values.paymentMethod,
-    status: values.status,
+    status,
     paymentStatus: receivedAmount >= grandTotal ? "paid" : receivedAmount > 0 ? "partial" : "unpaid",
     notes: values.notes,
     createdAt: now,
@@ -83,17 +107,20 @@ function toSale(values: SaleFormValues, id: string): Sale {
   };
 }
 
-function availableStock(values: SaleFormValues): number {
-  if (!values.productId || !values.warehouseId) return 0;
-  const inventoryItem = inventoryService.getByProductAndWarehouse(values.productId, values.warehouseId);
+function availableStock(productId: string, warehouseId: string): number {
+  if (!productId || !warehouseId) return 0;
+  const inventoryItem = inventoryService.getByProductAndWarehouse(productId, warehouseId);
   return inventoryItem ? inventoryItem.availableStock : 0;
 }
 
-function assertStock(values: SaleFormValues, quantity: number): void {
-  if (!values.productId || !values.warehouseId || quantity <= 0) return;
-  const available = availableStock(values);
-  if (available < quantity) {
-    throw new Error(`Insufficient stock available. Requested: ${quantity}, Available: ${available}`);
+function assertStock(values: SaleFormValues): void {
+  for (const item of values.items) {
+    const quantity = Number(item.quantity) || 0;
+    if (!item.productId || !values.warehouseId || quantity <= 0) continue;
+    const available = availableStock(item.productId, values.warehouseId);
+    if (available < quantity) {
+      throw new Error(`Insufficient stock available for ${productService.getById(item.productId)?.productName ?? item.productId}. Requested: ${quantity}, Available: ${available}`);
+    }
   }
 }
 
@@ -218,7 +245,7 @@ function getById(id: string): Sale | undefined {
 function create(values: SaleFormValues): Sale {
   ensure();
   const optimistic = toSale(values, nextId(cache ?? []));
-  assertStock(values, optimistic.quantity);
+  assertStock(values);
   cache = [...(cache ?? []), optimistic];
   persist();
   void fetchCreate(values, optimistic.id)

@@ -20,7 +20,7 @@ export default function SaleDetails({ sale, payments }: { sale: Sale; payments: 
             </div>
             <p className="mt-1 text-sm text-slate-500">Created on {formatDate(sale.createdAt)}</p>
             <div className="mt-5 grid gap-3 text-sm text-slate-600 sm:grid-cols-2 dark:text-slate-400">
-              <p className="flex items-center gap-2"><Package size={16} />{sale.productName}</p>
+              <p className="flex items-center gap-2"><Package size={16} />{sale.productName}{sale.items && sale.items.length > 1 ? ` (+${sale.items.length - 1} more)` : ""}</p>
               <p className="flex items-center gap-2"><Truck size={16} />{sale.customerName}</p>
               <p className="flex items-center gap-2"><Calendar size={16} />{formatDate(sale.saleDate)}</p>
               <p className="flex items-center gap-2"><WalletCards size={16} />{sale.batchNumber || "N/A"}</p>
@@ -29,15 +29,47 @@ export default function SaleDetails({ sale, payments }: { sale: Sale; payments: 
         </div>
 
         <div className="mt-6 border-t border-slate-100 pt-5 dark:border-slate-800">
-          <h3 className="text-sm font-semibold">Sale details</h3>
-          <div className="mt-4 grid gap-4 sm:grid-cols-2">
-            <DetailRow label="Warehouse" value={sale.warehouseName} />
-            <DetailRow label="Rice variety" value={sale.riceVariety || "N/A"} />
-            <DetailRow label="Quantity" value={`${sale.quantity} bags`} />
-            <DetailRow label="Bag weight" value={`${sale.bagWeight} KG`} />
-            <DetailRow label="Total weight" value={`${new Intl.NumberFormat("en-PK").format(sale.totalWeight)} KG`} />
-            <DetailRow label="Sale rate" value={`Rs. ${new Intl.NumberFormat("en-PK").format(sale.saleRate)}/KG`} />
-          </div>
+          {sale.items && sale.items.length > 0 ? (
+            <>
+              <h3 className="text-sm font-semibold">Items ({sale.items.length})</h3>
+              <div className="mt-4 overflow-hidden rounded-xl border border-slate-200 dark:border-slate-700">
+                <table className="w-full text-left text-sm">
+                  <thead className="bg-slate-50 text-xs uppercase tracking-wide text-slate-500 dark:bg-slate-800/40">
+                    <tr>
+                      <th className="px-4 py-2.5">Product</th>
+                      <th className="px-4 py-2.5 text-right">Qty</th>
+                      <th className="px-4 py-2.5 text-right">Bag KG</th>
+                      <th className="px-4 py-2.5 text-right">Rate</th>
+                      <th className="px-4 py-2.5 text-right">Subtotal</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {sale.items.map((item) => (
+                      <tr key={item.id} className="border-t border-slate-100 dark:border-slate-800">
+                        <td className="px-4 py-3 font-medium">{item.productName}</td>
+                        <td className="px-4 py-3 text-right">{item.quantity}</td>
+                        <td className="px-4 py-3 text-right">{item.bagWeight}</td>
+                        <td className="px-4 py-3 text-right">{formatCurrency(item.currentSalePrice)}</td>
+                        <td className="px-4 py-3 text-right font-semibold">{formatCurrency(item.subtotal)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </>
+          ) : (
+            <>
+              <h3 className="text-sm font-semibold">Sale details</h3>
+              <div className="mt-4 grid gap-4 sm:grid-cols-2">
+                <DetailRow label="Warehouse" value={sale.warehouseName} />
+                <DetailRow label="Rice variety" value={sale.riceVariety || "N/A"} />
+                <DetailRow label="Quantity" value={`${sale.quantity} bags`} />
+                <DetailRow label="Bag weight" value={`${sale.bagWeight} KG`} />
+                <DetailRow label="Total weight" value={`${new Intl.NumberFormat("en-PK").format(sale.totalWeight)} KG`} />
+                <DetailRow label="Sale rate" value={`Rs. ${new Intl.NumberFormat("en-PK").format(sale.saleRate)}/KG`} />
+              </div>
+            </>
+          )}
         </div>
 
         <div className="mt-6 border-t border-slate-100 pt-5 dark:border-slate-800">

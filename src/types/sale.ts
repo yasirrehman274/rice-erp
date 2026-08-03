@@ -1,6 +1,18 @@
-export type SaleStatus = "pending" | "dispatched" | "partial" | "cancelled";
+export type SaleStatus = "pending" | "dispatched" | "partial" | "paid" | "cancelled";
 export type SalePaymentStatus = "unpaid" | "partial" | "paid";
 export type SalePaymentMethod = "cash" | "bank" | "cheque" | "online";
+
+export interface SaleItem {
+  id: string;
+  productId: string;
+  productName: string;
+  quantity: number;
+  bagWeight: number;
+  totalWeight: number;
+  currentSalePrice: number;
+  saleRate: number;
+  subtotal: number;
+}
 
 export interface Sale {
   id: string;
@@ -35,6 +47,15 @@ export interface Sale {
   dispatchedDate?: string;
   dispatchedBy?: string;
   payments?: SalePayment[];
+  items?: SaleItem[];
+}
+
+export interface SaleItemForm {
+  id: string;
+  productId: string;
+  quantity: string;
+  bagWeight: string;
+  currentSalePrice: string;
 }
 
 export interface SaleFormValues {
@@ -42,19 +63,12 @@ export interface SaleFormValues {
   saleDate: string;
   customerId: string;
   warehouseId: string;
-  productId: string;
+  items: SaleItemForm[];
   batchNumber: string;
   riceVariety: string;
-  quantity: string;
-  bagWeight: string;
-  totalWeight: string;
-  currentSalePrice: string;
-  saleRate: string;
-  subtotal: string;
   discount: string;
   transportCharges: string;
   otherCharges: string;
-  grandTotal: string;
   receivedAmount: string;
   paymentMethod: SalePaymentMethod;
   status: SaleStatus;

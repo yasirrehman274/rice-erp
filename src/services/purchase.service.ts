@@ -235,19 +235,37 @@ function count(predicate?: (p: Purchase) => boolean): number {
   return predicate ? all.filter(predicate).length : all.length;
 }
 
-function getPurchasePayments(purchase: Purchase): PurchasePayment[] {
-  if (purchase.paidAmount === 0) return [];
-  const payments: PurchasePayment[] = [];
-  let remaining = purchase.paidAmount;
-  if (remaining >= purchase.grandTotal * 0.5) {
-    const firstAmount = Math.round(purchase.grandTotal * 0.5);
-    payments.push({ id: `pay-${purchase.id}-01`, purchaseId: purchase.id, date: purchase.purchaseDate, amount: firstAmount, method: purchase.paymentMethod, reference: `PAY-${purchase.purchaseNumber.slice(-4)}-01`, notes: "Initial advance payment." });
-    remaining -= firstAmount;
-  }
-  if (remaining > 0) {
-    payments.push({ id: `pay-${purchase.id}-02`, purchaseId: purchase.id, date: purchase.updatedAt, amount: remaining, method: purchase.paymentMethod, reference: `PAY-${purchase.purchaseNumber.slice(-4)}-02`, notes: "Balance payment." });
-  }
-  return payments;
+async function fetchPurchasePayments(id: string): Promise<PurchasePayment[]> {
+  return apiRequest<PurchasePayment[]>(`/purchases/${encodeURIComponent(id)}/payments`);
+}
+
+async function fetchAddPayment(id: string, amount: number, method: Purchase["paymentMethod"], notes: string): Promise<Purchase> {
+  const record = await apiRequest<Purchase>(`/purchases/${encodeURIComponent(id)}/payments`, {
+    method: "POST",
+    body: { amount, method, notes },
+  });
+  replaceRecord(record);
+  syncDependents();
+  return record;
+}
+
+async function fetchUpdatePayment(id: string, paymentId: string, amount: number, method: Purchase["paymentMethod"], notes: string): Promise<Purchase> {
+  const record = await apiRequest<Purchase>(`/purchases/${encodeURIComponent(id)}/payments/${encodeURIComponent(paymentId)}`, {
+    method: "PUT",
+    body: { amount, method, notes },
+  });
+  replaceRecord(record);
+  syncDependents();
+  return record;
+}
+
+async function fetchDeletePayment(id: string, paymentId: string): Promise<Purchase> {
+  const record = await apiRequest<Purchase>(`/purchases/${encodeURIComponent(id)}/payments/${encodeURIComponent(paymentId)}`, {
+    method: "DELETE",
+  });
+  replaceRecord(record);
+  syncDependents();
+  return record;
 }
 
 function getPurchaseHistory(): PurchaseHistoryEntry[] {
@@ -274,7 +292,10 @@ export const purchaseService = {
   search,
   filter,
   count,
-  getPurchasePayments,
+  fetchPurchasePayments,
+  fetchAddPayment,
+  fetchUpdatePayment,
+  fetchDeletePayment,
   getPurchaseHistory,
   refresh,
   fetchById,
