@@ -1,48 +1,45 @@
 const PREFIX = "rice_erp_";
 
-export function getItem<T>(key: string): T[] | null {
-  if (typeof window === "undefined") return null;
-  try {
-    const raw = localStorage.getItem(PREFIX + key);
-    return raw ? (JSON.parse(raw) as T[]) : null;
-  } catch {
-    return null;
+// Business records are database-only. Remove the legacy browser demo cache once
+// so an empty database cannot be repopulated after a refresh.
+function clearLegacyDemoData(): void {
+  if (typeof window === "undefined") return;
+  const keys: string[] = [];
+  for (let i = 0; i < localStorage.length; i += 1) {
+    const key = localStorage.key(i);
+    if (key?.startsWith(PREFIX)) keys.push(key);
   }
+  keys.forEach((key) => localStorage.removeItem(key));
+}
+
+clearLegacyDemoData();
+
+export function getItem<T>(key: string): T[] | null {
+  void key;
+  return null;
 }
 
 export function setItem<T>(key: string, data: T[]): void {
-  if (typeof window === "undefined") return;
-  localStorage.setItem(PREFIX + key, JSON.stringify(data));
+  void key;
+  void data;
 }
 
 export function removeItem(key: string): void {
-  if (typeof window === "undefined") return;
-  localStorage.removeItem(PREFIX + key);
+  void key;
 }
 
 export function clearAll(): void {
-  if (typeof window === "undefined") return;
-  const keys: string[] = [];
-  for (let i = 0; i < localStorage.length; i++) {
-    const k = localStorage.key(i);
-    if (k && k.startsWith(PREFIX)) keys.push(k);
-  }
-  keys.forEach((k) => localStorage.removeItem(k));
+  clearLegacyDemoData();
 }
 
 export function isSeeded(): boolean {
-  if (typeof window === "undefined") return false;
-  return localStorage.getItem(PREFIX + "__seeded__") === "true";
+  return true;
 }
 
 export function markSeeded(): void {
-  if (typeof window === "undefined") return;
-  localStorage.setItem(PREFIX + "__seeded__", "true");
+  // Demo data is intentionally not persisted or seeded in the browser.
 }
 
 export function ensureSeeded(seedFn: () => void): void {
-  if (!isSeeded()) {
-    seedFn();
-    markSeeded();
-  }
+  void seedFn;
 }

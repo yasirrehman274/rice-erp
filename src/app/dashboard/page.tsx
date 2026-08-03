@@ -1,14 +1,16 @@
 "use client";
 
-import { ChevronRight, Download } from "lucide-react";
+import { ChevronRight, Download, Factory } from "lucide-react";
 import Link from "next/link";
 import DashboardCards from "@/components/dashboard/DashboardCards";
 import RevenueChart from "@/components/dashboard/RevenueChart";
 import { warehouseService } from "@/services/warehouse.service";
 import { expenseService } from "@/services/expense.service";
+import { productionService } from "@/services/production.service";
 import { useState, useEffect } from "react";
 import type { Warehouse } from "@/types/warehouse";
 import type { Expense } from "@/types/expense";
+import type { Production } from "@/types/production";
 import { formatCurrency } from "@/lib/utils";
 
 const warehouseColors = ["bg-emerald-500", "bg-blue-500", "bg-amber-500", "bg-violet-500", "bg-rose-500", "bg-cyan-500"];
@@ -16,16 +18,21 @@ const warehouseColors = ["bg-emerald-500", "bg-blue-500", "bg-amber-500", "bg-vi
 export default function DashboardPage() {
   const [warehouses, setWarehouses] = useState<Warehouse[]>([]);
   const [expenses, setExpenses] = useState<Expense[]>([]);
+  const [productions, setProductions] = useState<Production[]>([]);
 
   useEffect(() => {
     let mounted = true;
     warehouseService.refresh().then((data) => { if (mounted) setWarehouses(data); }).catch(() => { if (mounted) setWarehouses(warehouseService.getAll()); });
     expenseService.refresh().then((data) => { if (mounted) setExpenses(data); }).catch(() => { if (mounted) setExpenses(expenseService.getAll()); });
+    productionService.refresh().then((data) => { if (mounted) setProductions(data); }).catch(() => { if (mounted) setProductions(productionService.getAll()); });
     return () => { mounted = false; };
   }, []);
 
   const maxStock = Math.max(...warehouses.map((w) => w.totalStock), 1);
   const recentExpenses = expenses.slice(0, 5);
+  const todayProduction = productionService.totalOutputBags(productionService.byDate(productions));
+  const totalProductionCost = productionService.totalProductionCost(productions);
+  const finishedGoods = productionService.finishedGoods(productions);
 
   return <div className="space-y-6">
     <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
@@ -58,6 +65,30 @@ export default function DashboardPage() {
       </section>
     </div>
 
+    <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900 sm:p-6">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <h2 className="flex items-center gap-2 font-semibold"><Factory size={18} className="text-emerald-600" />Production overview</h2>
+          <p className="mt-1 text-sm text-slate-500">Today&apos;s output, production cost and finished goods.</p>
+        </div>
+        <Link href="/production" className="inline-flex items-center gap-1 text-sm font-semibold text-emerald-600 hover:text-emerald-500">View all<ChevronRight size={15} /></Link>
+      </div>
+      <div className="mt-5 grid gap-8 lg:grid-cols-[minmax(0,1fr)_minmax(260px,0.8fr)]">
+        <div className="grid gap-4 sm:grid-cols-3">
+          <ProductionStat label="Today&apos;s production" value={`${todayProduction} bags`} />
+          <ProductionStat label="Production cost" value={formatCurrency(totalProductionCost)} />
+          <ProductionStat label="Finished goods" value={`${finishedGoods.length} products`} />
+        </div>
+        <div>
+          <h3 className="text-sm font-semibold">Top finished goods</h3>
+          <div className="mt-3 space-y-3">
+            {finishedGoods.length === 0 && <p className="text-sm text-slate-500">No finished goods produced yet.</p>}
+            {finishedGoods.slice(0, 4).map((item) => <div key={item.productId} className="flex items-center justify-between text-sm"><span className="font-medium">{item.productName}</span><span className="text-slate-500">{item.bags} bags</span></div>)}
+          </div>
+        </div>
+      </div>
+    </section>
+
     <section className="rounded-2xl border border-slate-200 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-900">
       <div className="flex items-center justify-between border-b border-slate-100 px-5 py-4 dark:border-slate-800">
         <h2 className="font-semibold">Recent expenses</h2>
@@ -89,3 +120,8 @@ export default function DashboardPage() {
     </section>
   </div>;
 }
+
+function ProductionStat({ label, value }: { label: string; value: string }) {
+  return <div className="rounded-xl border border-slate-200 p-4 dark:border-slate-700"><p className="text-xs text-slate-500">{label}</p><p className="mt-1 text-xl font-bold">{value}</p></div>;
+}
+

@@ -34,6 +34,7 @@ export interface Sale {
   updatedAt: string;
   dispatchedDate?: string;
   dispatchedBy?: string;
+  payments?: SalePayment[];
 }
 
 export interface SaleFormValues {

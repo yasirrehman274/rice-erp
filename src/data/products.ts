@@ -443,6 +443,23 @@ const raw: Array<
     "active",
     "2025-09-01",
   ],
+  [
+    "prd-026",
+    "Premium Mix Rice 50kg",
+    "PRM-MIX-50",
+    "Premium Mix",
+    "Falak",
+    "Blend",
+    "Bag",
+    "50 KG",
+    0,
+    8500,
+    50,
+    0,
+    0,
+    "active",
+    "2026-07-20",
+  ],
 ];
 export const products: Product[] = raw.map(
   ([

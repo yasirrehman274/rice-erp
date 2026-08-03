@@ -13,6 +13,7 @@ export default function SalePaymentsPage({ params }: { params: Promise<{ id: str
   const [sale, setSale] = useState<Sale | undefined>();
   const [payments, setPayments] = useState<SalePayment[]>([]);
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [error, setError] = useState("");
 
   useEffect(() => {
     let mounted = true;
@@ -23,12 +24,12 @@ export default function SalePaymentsPage({ params }: { params: Promise<{ id: str
         if (!mounted) return;
         const s = all.find((item) => item.id === id);
         setSale(s);
-        if (s) setPayments(saleService.getSalePayments(s));
+        if (s) setPayments(await saleService.fetchSalePayments(s.id));
       } catch {
         if (!mounted) return;
         const s = saleService.getById(id);
         setSale(s);
-        if (s) setPayments(saleService.getSalePayments(s));
+        if (s) setPayments(await saleService.fetchSalePayments(s.id));
       }
     });
     return () => {
@@ -46,6 +47,7 @@ export default function SalePaymentsPage({ params }: { params: Promise<{ id: str
       <div><h1 className="text-2xl font-bold tracking-tight sm:text-3xl">Sale payments</h1><p className="mt-1 text-sm text-slate-500">Payment history for {sale.saleNumber}.</p></div>
       {sale.remainingBalance > 0 && sale.status !== "cancelled" && <button onClick={() => setDialogOpen(true)} className="inline-flex items-center gap-2 rounded-xl bg-emerald-600 px-3.5 py-2.5 text-sm font-semibold text-white shadow-lg shadow-emerald-600/20 hover:bg-emerald-700"><DollarSign size={17} />Record payment</button>}
     </div>
+    {error && <p className="mb-4 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">{error}</p>}
 
     <div className="grid gap-4 sm:grid-cols-3">
       <article className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900"><p className="text-sm text-slate-500">Grand total</p><p className="mt-2 text-xl font-bold">{formatCurrency(sale.grandTotal)}</p></article>
@@ -78,6 +80,6 @@ export default function SalePaymentsPage({ params }: { params: Promise<{ id: str
       </div>
     </section>
 
-    <SalePaymentDialog sale={sale} open={dialogOpen} onClose={() => setDialogOpen(false)} onConfirm={(amount, method, notes) => { const newPayment: SalePayment = { id: `pay-${Date.now()}`, saleId: sale.id, date: new Date().toISOString().slice(0, 10), amount, method, reference: `PAY-${Date.now()}`, notes }; setPayments((current) => [...current, newPayment]); setDialogOpen(false); }} />
+    <SalePaymentDialog sale={sale} open={dialogOpen} onClose={() => setDialogOpen(false)} onConfirm={async (amount, method, notes) => { try { setError(""); const updated = await saleService.fetchAddPayment(sale.id, amount, method, notes); setSale(updated); setPayments(await saleService.fetchSalePayments(updated.id)); setDialogOpen(false); } catch (paymentError) { setError(paymentError instanceof Error ? paymentError.message : "Could not record the payment."); } }} />
   </div>;
 }

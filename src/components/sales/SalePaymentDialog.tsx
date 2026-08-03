@@ -13,10 +13,23 @@ export default function SalePaymentDialog({ sale, open, onClose, onConfirm }: Sa
 
   if (!open || !sale) return null;
 
+  const enteredAmount = Number(amount) || 0;
+  const remainingAfterPayment = Math.max(0, sale.remainingBalance - enteredAmount);
+
+  function updateAmount(value: string) {
+    if (value === "") {
+      setAmount("");
+      return;
+    }
+    const numericValue = Number(value);
+    if (!Number.isFinite(numericValue)) return;
+    setAmount(String(Math.min(Math.max(0, numericValue), sale.remainingBalance)));
+  }
+
   function submit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const numAmount = Number(amount);
-    if (!numAmount || numAmount <= 0) return;
+    if (!numAmount || numAmount <= 0 || numAmount > sale.remainingBalance) return;
     onConfirm(numAmount, method, notes);
     setAmount("");
     setNotes("");
@@ -31,7 +44,7 @@ export default function SalePaymentDialog({ sale, open, onClose, onConfirm }: Sa
       <p className="mt-1 text-xl font-bold text-amber-700 dark:text-amber-400">Rs. {new Intl.NumberFormat("en-PK").format(sale.remainingBalance)}</p>
     </div>
     <form onSubmit={submit} className="mt-5 space-y-4">
-      <label><span className="mb-2 block text-sm font-medium">Amount <span className="text-rose-600">*</span></span><input type="number" min="1" max={sale.remainingBalance} value={amount} onChange={(event) => setAmount(event.target.value)} placeholder="0" className="h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm outline-none focus:border-emerald-500 focus:ring-4 focus:ring-emerald-500/10 dark:border-slate-700 dark:bg-slate-800" /></label>
+      <label><span className="mb-2 block text-sm font-medium">Amount <span className="text-rose-600">*</span></span><input type="number" min="1" max={sale.remainingBalance} value={amount} onChange={(event) => updateAmount(event.target.value)} placeholder="0" className="h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm outline-none focus:border-emerald-500 focus:ring-4 focus:ring-emerald-500/10 dark:border-slate-700 dark:bg-slate-800" /><span className="mt-2 block text-xs text-slate-500">Outstanding after payment: <span className="font-semibold text-emerald-600">Rs. {new Intl.NumberFormat("en-PK").format(remainingAfterPayment)}</span></span></label>
       <label><span className="mb-2 block text-sm font-medium">Payment method</span><select value={method} onChange={(event) => setMethod(event.target.value as SalePaymentMethod)} className="h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm outline-none focus:border-emerald-500 dark:border-slate-700 dark:bg-slate-800"><option value="cash">Cash</option><option value="bank">Bank Transfer</option><option value="cheque">Cheque</option><option value="online">Online</option></select></label>
       <label><span className="mb-2 block text-sm font-medium">Notes</span><textarea value={notes} onChange={(event) => setNotes(event.target.value)} placeholder="Payment reference or notes..." rows={2} className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm outline-none focus:border-emerald-500 focus:ring-4 focus:ring-emerald-500/10 dark:border-slate-700 dark:bg-slate-800" /></label>
       <div className="flex justify-end gap-3 pt-2"><button type="button" onClick={onClose} className="rounded-xl border border-slate-200 px-4 py-2.5 text-sm font-semibold hover:bg-slate-50 dark:border-slate-700 dark:hover:bg-slate-800">Cancel</button><button type="submit" className="inline-flex items-center gap-2 rounded-xl bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-emerald-700"><DollarSign size={16} />Record payment</button></div>

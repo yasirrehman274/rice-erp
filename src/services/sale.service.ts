@@ -192,6 +192,20 @@ async function fetchDelete(id: string): Promise<void> {
   syncDependents();
 }
 
+async function fetchSalePayments(id: string): Promise<SalePayment[]> {
+  return apiRequest<SalePayment[]>(`/sales/${encodeURIComponent(id)}/payments`);
+}
+
+async function fetchAddPayment(id: string, amount: number, method: Sale["paymentMethod"], notes: string): Promise<Sale> {
+  const record = await apiRequest<Sale>(`/sales/${encodeURIComponent(id)}/payments`, {
+    method: "POST",
+    body: { amount, method, notes },
+  });
+  replaceRecord(record);
+  syncDependents();
+  return record;
+}
+
 function getAll(): Sale[] {
   ensure();
   return cache ?? [];
@@ -251,6 +265,7 @@ function count(predicate?: (s: Sale) => boolean): number {
 }
 
 function getSalePayments(sale: Sale): SalePayment[] {
+  if (sale.payments?.length) return sale.payments;
   if (sale.receivedAmount === 0) return [];
   const payments: SalePayment[] = [];
   let remaining = sale.receivedAmount;
@@ -296,4 +311,6 @@ export const saleService = {
   fetchCreate,
   fetchUpdate,
   fetchDelete,
+  fetchSalePayments,
+  fetchAddPayment,
 };

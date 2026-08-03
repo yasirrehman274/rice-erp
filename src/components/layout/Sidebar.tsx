@@ -13,6 +13,7 @@ import {
   Settings,
   Wheat,
   Receipt,
+  Factory,
 } from "lucide-react";
 import SidebarItem from "./SidebarItem";
 
@@ -23,6 +24,7 @@ const menu = [
   { title: "Products", href: "/products", icon: Package },
   { title: "Sales", href: "/sales", icon: BadgeDollarSign },
   { title: "Expenses", href: "/expenses", icon: Receipt },
+  { title: "Production", href: "/production", icon: Factory },
   { title: "Customers", href: "/customers", icon: Users },
   { title: "Suppliers", href: "/suppliers", icon: Truck },
   { title: "Warehouses", href: "/warehouses", icon: Warehouse },

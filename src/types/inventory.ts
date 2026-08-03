@@ -1,4 +1,4 @@
-export type StockMovementType = "opening" | "purchase" | "sale" | "adjustment" | "transfer-in" | "transfer-out";
+export type StockMovementType = "opening" | "purchase" | "sale" | "adjustment" | "transfer-in" | "transfer-out" | "production-in" | "production-out";
 export type InventoryStatus = "in-stock" | "low-stock" | "out-of-stock";
 
 export interface InventoryItem {

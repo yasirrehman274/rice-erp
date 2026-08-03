@@ -4,6 +4,7 @@ import { seedAll } from "@/utils/seed";
 import { apiRequest } from "@/lib/api";
 import { purchaseService } from "./purchase.service";
 import { saleService } from "./sale.service";
+import { productionService } from "./production.service";
 
 const KEY = "inventory";
 
@@ -174,26 +175,28 @@ async function transferStock(item: InventoryItem, values: StockTransferValues): 
 function getStockLedger(item: InventoryItem): StockLedgerEntry[] {
   type MiniPurchase = { id: string; purchaseNumber: string; purchaseDate: string; productId: string; warehouseId: string; quantity: number };
   type MiniSale = { id: string; saleNumber: string; saleDate: string; productId: string; warehouseId: string; quantity: number };
+  type MiniMaterial = { productId: string; warehouseId: string; quantityUsed: number };
+  type MiniProduction = { id: string; productionNumber: string; productionDate: string; warehouseId: string; outputProductId: string; outputBags: number; materials: MiniMaterial[] };
+  type MiniMovement = { id: string; date: string; type: StockLedgerEntry["type"]; description: string; reference: string; stockIn: number; stockOut: number };
   const purchases = purchaseService.getAll() as MiniPurchase[];
   const sales = saleService.getAll() as MiniSale[];
+  const productions = productionService.getAll() as MiniProduction[];
+  const movements: MiniMovement[] = [];
+  purchases.filter((p) => p.productId === item.productId && p.warehouseId === item.warehouseId)
+    .forEach((p) => movements.push({ id: `led-p-${p.id}`, date: p.purchaseDate, type: "purchase", description: "Purchase receipt", reference: p.purchaseNumber, stockIn: p.quantity, stockOut: 0 }));
+  productions.filter((p) => p.warehouseId === item.warehouseId && p.outputProductId === item.productId && p.outputBags > 0)
+    .forEach((p) => movements.push({ id: `led-pi-${p.id}`, date: p.productionDate, type: "production-in", description: "Production output", reference: p.productionNumber, stockIn: p.outputBags, stockOut: 0 }));
+  productions.forEach((p) => p.materials.filter((m) => m.warehouseId === item.warehouseId && m.productId === item.productId)
+    .forEach((m) => movements.push({ id: `led-po-${p.id}-${m.productId}`, date: p.productionDate, type: "production-out", description: "Production mix", reference: p.productionNumber, stockIn: 0, stockOut: m.quantityUsed })));
+  sales.filter((s) => s.productId === item.productId && s.warehouseId === item.warehouseId)
+    .forEach((s) => movements.push({ id: `led-s-${s.id}`, date: s.saleDate, type: "sale", description: "Sales dispatch", reference: s.saleNumber, stockIn: 0, stockOut: s.quantity }));
+  movements.sort((a, b) => a.date.localeCompare(b.date));
   const entries: StockLedgerEntry[] = [];
   let balance = 0;
-  const productPurchases = purchases.filter((p) => p.productId === item.productId && p.warehouseId === item.warehouseId).sort((a, b) => a.purchaseDate.localeCompare(b.purchaseDate));
-  const productSales = sales.filter((s) => s.productId === item.productId && s.warehouseId === item.warehouseId).sort((a, b) => a.saleDate.localeCompare(b.saleDate));
-  let pi = 0, si = 0;
-  while (pi < productPurchases.length || si < productSales.length) {
-    const p = pi < productPurchases.length ? productPurchases[pi] : null;
-    const s = si < productSales.length ? productSales[si] : null;
-    if (p && (!s || p.purchaseDate <= s.saleDate)) {
-      balance += p.quantity;
-      entries.push({ id: `led-p-${p.id}`, date: p.purchaseDate, type: "purchase", description: "Purchase receipt", reference: p.purchaseNumber, warehouse: item.warehouseName, stockIn: p.quantity, stockOut: 0, balance });
-      pi++;
-    } else if (s) {
-      balance -= s.quantity;
-      entries.push({ id: `led-s-${s.id}`, date: s.saleDate, type: "sale", description: "Sales dispatch", reference: s.saleNumber, warehouse: item.warehouseName, stockIn: 0, stockOut: s.quantity, balance });
-      si++;
-    }
-  }
+  movements.forEach((m) => {
+    balance += m.stockIn - m.stockOut;
+    entries.push({ id: m.id, date: m.date, type: m.type, description: m.description, reference: m.reference, warehouse: item.warehouseName, stockIn: m.stockIn, stockOut: m.stockOut, balance });
+  });
   return entries;
 }
 
