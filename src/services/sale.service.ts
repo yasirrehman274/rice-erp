@@ -1,4 +1,4 @@
-import type { Sale, SalePayment, SaleHistoryEntry, SaleFormValues, SaleItem } from "@/types/sale";
+import type { Sale, SalePayment, SaleHistoryEntry, SaleFormValues, SaleItem, SaleItemForm } from "@/types/sale";
 import { getItem, setItem, ensureSeeded } from "@/lib/storage";
 import { seedAll } from "@/utils/seed";
 import { apiRequest } from "@/lib/api";
@@ -113,15 +113,49 @@ function availableStock(productId: string, warehouseId: string): number {
   return inventoryItem ? inventoryItem.availableStock : 0;
 }
 
-function assertStock(values: SaleFormValues): void {
-  for (const item of values.items) {
+function availableStockFor(productId: string, warehouseId: string): number {
+  return availableStock(productId, warehouseId);
+}
+
+function validateItemStock(
+  items: SaleItemForm[],
+  warehouseId: string,
+  resolveStock: (productId: string) => number,
+): { itemId: string; message: string }[] {
+  if (!warehouseId || items.length === 0) return [];
+  const perProduct = new Map<string, number>();
+  for (const item of items) {
+    if (!item.productId) continue;
+    perProduct.set(item.productId, (perProduct.get(item.productId) ?? 0) + (Number(item.quantity) || 0));
+  }
+  const errors: { itemId: string; message: string }[] = [];
+  for (const item of items) {
+    if (!item.productId) continue;
+    const totalAvailable = resolveStock(item.productId);
     const quantity = Number(item.quantity) || 0;
-    if (!item.productId || !values.warehouseId || quantity <= 0) continue;
-    const available = availableStock(item.productId, values.warehouseId);
-    if (available < quantity) {
-      throw new Error(`Insufficient stock available for ${productService.getById(item.productId)?.productName ?? item.productId}. Requested: ${quantity}, Available: ${available}`);
+    const otherRows = (perProduct.get(item.productId) ?? 0) - quantity;
+    const effective = Math.max(0, totalAvailable - otherRows);
+    if (totalAvailable <= 0) {
+      errors.push({ itemId: item.id, message: "This product is out of stock." });
+    } else if (quantity > effective) {
+      errors.push({ itemId: item.id, message: `Insufficient stock. Only ${effective} bags available.` });
     }
   }
+  return errors;
+}
+
+function validateStock(values: SaleFormValues): { itemId: string; message: string }[] {
+  return validateItemStock(values.items, values.warehouseId, (productId) => availableStock(productId, values.warehouseId));
+}
+
+function assertStock(values: SaleFormValues): void {
+  const issues = validateStock(values);
+  if (issues.length === 0) return;
+  const item = values.items.find((i) => i.id === issues[0].itemId);
+  const product = item?.productId ? productService.getById(item.productId) : undefined;
+  const quantity = item ? Number(item.quantity) || 0 : 0;
+  const available = item?.productId && values.warehouseId ? availableStock(item.productId, values.warehouseId) : 0;
+  throw new Error(`Insufficient stock available for ${product?.productName ?? item?.productId ?? "product"}. Requested: ${quantity}, Available: ${available}`);
 }
 
 function replaceRecord(record: Sale): void {
@@ -259,6 +293,7 @@ function update(id: string, values: SaleFormValues): Sale {
   const idx = (cache ?? []).findIndex((s) => s.id === id);
   if (idx === -1) throw new Error("Sale not found");
   const previous = cache![idx];
+  assertStock(values);
   const updated = toSale(values, id);
   cache![idx] = updated;
   persist();
@@ -333,6 +368,9 @@ export const saleService = {
   count,
   getSalePayments,
   getSaleHistory,
+  validateStock,
+  validateItemStock,
+  availableStockFor,
   refresh,
   fetchById,
   fetchCreate,
