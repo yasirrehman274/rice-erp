@@ -5,27 +5,91 @@ import { supplierService } from "./supplier.service";
 import { customerService } from "./customer.service";
 import { warehouseService } from "./warehouse.service";
 import { inventoryService } from "./inventory.service";
+import { expenseService } from "./expense.service";
+import { productionService } from "./production.service";
+import {
+  resolveDateRange,
+  inRange,
+  calcInventoryValue,
+  calcInventoryReport,
+  calcProfitLoss,
+  calcPurchaseSummary,
+  calcSalesSummary,
+  calcExpenseSummary,
+  calcProductionSummary,
+  isActivePurchase,
+  type DateRange,
+  type ReportPeriod,
+} from "@/lib/reporting";
 
-function getDashboardData() {
+export { PERIOD_OPTIONS } from "@/lib/reporting";
+export type { ReportPeriod, DateRange } from "@/lib/reporting";
+
+export function resolveRange(period: ReportPeriod, custom?: { start?: string; end?: string }): DateRange {
+  return resolveDateRange(period, custom);
+}
+
+export function getDashboardData(range?: DateRange) {
   const purchases = purchaseService.getAll();
   const sales = saleService.getAll();
+  const expenses = expenseService.getAll();
   const products = productService.getAll();
   const suppliers = supplierService.getAll();
   const customers = customerService.getAll();
   const warehouses = warehouseService.getAll();
   const inventory = inventoryService.getAll();
+  const productions = productionService.getAll();
+  const selectedRange = range ?? { start: null, end: null };
 
-  const totalPurchases = purchases.reduce((sum, p) => sum + p.grandTotal, 0);
-  const totalSales = sales.reduce((sum, s) => sum + s.grandTotal, 0);
-  const totalInventory = inventory.reduce((sum, item) => sum + item.currentStock, 0);
-  const lowStockItems = inventory.filter((item) => item.currentStock <= item.minimumStock).length;
+  const purchaseSummary = calcPurchaseSummary(purchases, selectedRange);
+  const salesSummary = calcSalesSummary(sales, selectedRange);
+  const expenseSummary = calcExpenseSummary(expenses, selectedRange);
+  const productionSummary = calcProductionSummary(productions, selectedRange);
+  const profitLoss = calcProfitLoss({ sales, expenses, inventory, range: selectedRange });
+  const inventoryValue = calcInventoryValue(inventory, products);
+  const activePurchases = purchases.filter((p) => isActivePurchase(p) && inRange(p.purchaseDate, selectedRange));
 
   return {
-    totalPurchases,
-    totalSales,
-    profit: totalSales - totalPurchases,
-    totalInventory,
-    lowStockItems,
+    purchaseSummary: {
+      orderCount: purchaseSummary.orderCount,
+      total: purchaseSummary.total,
+      discount: purchaseSummary.discount,
+      transportCharges: purchaseSummary.transportCharges,
+      otherCharges: purchaseSummary.otherCharges,
+      netTotal: purchaseSummary.netTotal,
+      avgPerOrder: purchaseSummary.orderCount > 0 ? purchaseSummary.total / purchaseSummary.orderCount : 0,
+    },
+    salesSummary: {
+      orderCount: salesSummary.orderCount,
+      total: salesSummary.total,
+      discount: salesSummary.discount,
+    },
+    expenseSummary: {
+      total: expenseSummary.total,
+      count: expenseSummary.count,
+      pending: expenseSummary.pending,
+    },
+    productionSummary: {
+      batches: productionSummary.batches,
+      outputBags: productionSummary.outputBags,
+      cost: productionSummary.cost,
+    },
+    profitLoss: {
+      grossSales: profitLoss.grossSales,
+      salesDiscount: profitLoss.salesDiscount,
+      netSales: profitLoss.netSales,
+      cogs: profitLoss.cogs.total,
+      grossProfit: profitLoss.grossProfit,
+      operatingExpenses: profitLoss.operatingExpenses,
+      netProfit: profitLoss.netProfit,
+    },
+    inventoryValue: {
+      totalBags: inventoryValue.totalBags,
+      totalValue: inventoryValue.totalValue,
+      lowStockItems: inventoryValue.lowStockCount,
+      outOfStockItems: inventoryValue.outOfStockCount,
+    },
+    activePurchasesCount: activePurchases.length,
     activeSuppliers: suppliers.filter((s) => s.status === "active").length,
     activeCustomers: customers.filter((c) => c.status === "active").length,
     activeWarehouses: warehouses.filter((w) => w.status === "active").length,
@@ -33,42 +97,34 @@ function getDashboardData() {
   };
 }
 
-function getProfitLossData() {
+export function getProfitLossData(range?: DateRange) {
+  const sales = saleService.getAll();
+  const expenses = expenseService.getAll();
+  const inventory = inventoryService.getAll();
+  const selectedRange = range ?? { start: null, end: null };
+  return calcProfitLoss({ sales, expenses, inventory, range: selectedRange });
+}
+
+export function getInventoryReportData(range?: DateRange) {
   const purchases = purchaseService.getAll();
   const sales = saleService.getAll();
+  const products = productService.getAll();
+  const inventory = inventoryService.getAll();
+  const productions = productionService.getAll();
+  const selectedRange = range ?? { start: null, end: null };
+  return calcInventoryReport({ inventory, products, purchases, sales, productions, range: selectedRange });
+}
 
-  const totalSales = sales.reduce((sum, s) => sum + s.grandTotal, 0);
-  const totalPurchases = purchases.reduce((sum, p) => sum + p.grandTotal, 0);
-  const totalSalesDiscount = sales.reduce((sum, s) => sum + s.discount, 0);
-  const totalPurchaseDiscount = purchases.reduce((sum, p) => sum + p.discount, 0);
-  const totalTransportOut = sales.reduce((sum, s) => sum + s.transportCharges, 0);
-  const totalTransportIn = purchases.reduce((sum, p) => sum + p.transportCharges, 0);
-  const totalOtherOut = sales.reduce((sum, s) => sum + s.otherCharges, 0);
-  const totalOtherIn = purchases.reduce((sum, p) => sum + p.otherCharges, 0);
-  const netSales = totalSales - totalSalesDiscount;
-  const netPurchases = totalPurchases - totalPurchaseDiscount;
-  const grossProfit = netSales - netPurchases;
-  const totalExpenses = totalTransportOut + totalOtherOut;
-  const netProfit = grossProfit - totalExpenses;
-
-  return {
-    totalSales,
-    totalPurchases,
-    totalSalesDiscount,
-    totalPurchaseDiscount,
-    totalTransportIn,
-    totalTransportOut,
-    totalOtherIn,
-    totalOtherOut,
-    netSales,
-    netPurchases,
-    grossProfit,
-    totalExpenses,
-    netProfit,
-  };
+export function getInventoryValuation() {
+  const inventory = inventoryService.getAll();
+  const products = productService.getAll();
+  return calcInventoryValue(inventory, products);
 }
 
 export const reportService = {
   getDashboardData,
   getProfitLossData,
+  getInventoryReportData,
+  getInventoryValuation,
+  resolveRange,
 };

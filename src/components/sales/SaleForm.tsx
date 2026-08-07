@@ -9,8 +9,6 @@ import {
   CreditCard,
   User,
   Building2,
-  Calendar,
-  Hash,
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
@@ -111,22 +109,20 @@ function currency(value: number) {
 export default function SaleForm({ sale }: { sale?: Sale }) {
   const router = useRouter();
   const [values, setValues] = useState(() => toFormValues(sale));
-  const [customers, setCustomers] = useState<Customer[]>([]);
-  const [products, setProducts] = useState<Product[]>([]);
-  const [warehouses, setWarehouses] = useState<Warehouse[]>([]);
-  const [inventory, setInventory] = useState<InventoryItem[]>([]);
+  const [customers] = useState<Customer[]>(() => customerService.getAll());
+  const [products] = useState<Product[]>(() => productService.getAll());
+  const [warehouses] = useState<Warehouse[]>(() => warehouseService.getAll());
+  const [inventory, setInventory] = useState<InventoryItem[]>(() => inventoryService.getAll());
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [saved, setSaved] = useState(false);
 
   useEffect(() => {
-    setCustomers(customerService.getAll());
-    setProducts(productService.getAll());
-    setWarehouses(warehouseService.getAll());
-    setInventory(inventoryService.getAll());
+    let mounted = true;
     void inventoryService
       .refresh()
-      .then(setInventory)
-      .catch(() => setInventory(inventoryService.getAll()));
+      .then((data) => { if (mounted) setInventory(data); })
+      .catch(() => { if (mounted) setInventory(inventoryService.getAll()); });
+    return () => { mounted = false; };
   }, []);
 
   const selectedCustomer = customers.find(
