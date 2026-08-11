@@ -5,6 +5,7 @@ import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import type { Expense, ExpenseFormValues } from "@/types/expense";
 import { DEFAULT_EXPENSE_CATEGORIES } from "@/types/expense";
+import LoadingSpinner from "@/components/ui/LoadingSpinner";
 import { expenseService } from "@/services/expense.service";
 
 const emptyValues: ExpenseFormValues = {
@@ -277,10 +278,19 @@ export default function ExpenseForm({ expense }: { expense?: Expense }) {
         <button
           type="submit"
           disabled={saved}
+          aria-busy={saved}
           className="inline-flex items-center gap-2 rounded-xl bg-emerald-600 px-5 py-2.5 text-sm font-semibold text-white shadow-lg shadow-emerald-600/20 hover:bg-emerald-700 disabled:opacity-70"
         >
           <Save size={16} />
-          {saved ? "Saving..." : expense ? "Update expense" : "Save expense"}
+          {saved ? (
+            <>
+              <LoadingSpinner size={16} /> Saving...
+            </>
+          ) : expense ? (
+            "Update expense"
+          ) : (
+            "Save expense"
+          )}
         </button>
       </div>
     </form>

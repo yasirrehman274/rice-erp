@@ -1,0 +1,65 @@
+
+> rice-erp@0.1.0 dev
+> next dev
+
+▲ Next.js 16.2.11 (Turbopack)
+- Local:         http://localhost:3000
+- Network:       http://192.168.1.117:3000
+- Environments: .env
+✓ Ready in 1231ms
+
+○ Compiling /dashboard ...
+ GET /dashboard 200 in 14.1s (next.js: 12.1s, application-code: 2.0s)
+ GET /dashboard 200 in 130ms (next.js: 13ms, application-code: 116ms)
+ GET /products 200 in 1677ms (next.js: 1543ms, application-code: 134ms)
+ GET /sales/add 200 in 1311ms (next.js: 1164ms, application-code: 148ms)
+ GET /nonexistent-route 404 in 765ms (next.js: 674ms, application-code: 92ms)
+○ Compiling /inventory ...
+ GET /inventory 200 in 3.5s (next.js: 3.3s, application-code: 202ms)
+ GET /purchases 200 in 3.0s (next.js: 2.9s, application-code: 116ms)
+ GET /purchases/add 200 in 2.1s (next.js: 2.0s, application-code: 119ms)
+ GET /products 200 in 146ms (next.js: 27ms, application-code: 119ms)
+ GET /reports 200 in 3.3s (next.js: 3.2s, application-code: 108ms)
+ GET /reports/profit-loss 200 in 2.1s (next.js: 2.0s, application-code: 116ms)
+ GET /warehouses 200 in 3.3s (next.js: 3.2s, application-code: 128ms)
+ GET /suppliers 200 in 2.8s (next.js: 2.7s, application-code: 111ms)
+ GET /customers 200 in 2.5s (next.js: 2.4s, application-code: 107ms)
+ GET /customers/view/cus-002 200 in 3.0s (next.js: 2.9s, application-code: 122ms)
+ GET /customers/ledger/cus-002 200 in 2.8s (next.js: 2.7s, application-code: 118ms)
+ GET /production 200 in 3.1s (next.js: 3.0s, application-code: 108ms)
+ GET /production/add 200 in 2.8s (next.js: 2.7s, application-code: 92ms)
+ GET /warehouses 200 in 413ms (next.js: 27ms, application-code: 387ms)
+ GET /suppliers 200 in 119ms (next.js: 27ms, application-code: 92ms)
+ GET /suppliers 200 in 107ms (next.js: 26ms, application-code: 81ms)
+ GET /warehouses 200 in 135ms (next.js: 61ms, application-code: 74ms)
+ GET /reports 200 in 114ms (next.js: 21ms, application-code: 93ms)
+ GET /settings 200 in 2.3s (next.js: 2.1s, application-code: 134ms)
+ GET /suppliers 200 in 115ms (next.js: 26ms, application-code: 89ms)
+ GET /warehouses 200 in 109ms (next.js: 20ms, application-code: 89ms)
+ GET /reports 200 in 108ms (next.js: 26ms, application-code: 82ms)
+ GET /reports/profit-loss 200 in 137ms (next.js: 26ms, application-code: 111ms)
+ GET /warehouses 200 in 92ms (next.js: 16ms, application-code: 75ms)
+ GET /suppliers 200 in 99ms (next.js: 16ms, application-code: 84ms)
+ GET /customers 200 in 116ms (next.js: 26ms, application-code: 90ms)
+ GET /production 200 in 149ms (next.js: 56ms, application-code: 93ms)
+○ Compiling /expenses ...
+ GET /expenses 200 in 3.4s (next.js: 3.2s, application-code: 145ms)
+ GET /sales 200 in 2.7s (next.js: 2.6s, application-code: 82ms)
+ GET /dashboard 200 in 143ms (next.js: 28ms, application-code: 116ms)
+ GET /production 200 in 106ms (next.js: 16ms, application-code: 90ms)
+ GET /dashboard 200 in 87ms (next.js: 15ms, application-code: 73ms)
+ GET /expenses 200 in 96ms (next.js: 15ms, application-code: 81ms)
+ GET /dashboard 200 in 103ms (next.js: 20ms, application-code: 84ms)
+ GET /inventory 200 in 124ms (next.js: 25ms, application-code: 98ms)
+ GET /purchases 200 in 138ms (next.js: 53ms, application-code: 85ms)
+ GET / 200 in 1433ms (next.js: 1233ms, application-code: 200ms)
+ GET /admin/dashboard 404 in 207ms (next.js: 33ms, application-code: 174ms)
+ GET / 200 in 138ms (next.js: 10ms, application-code: 127ms)
+ GET /admin/donations 404 in 220ms (next.js: 42ms, application-code: 177ms)
+ GET / 200 in 150ms (next.js: 23ms, application-code: 127ms)
+ GET /admin/dashboard 404 in 217ms (next.js: 32ms, application-code: 186ms)
+ GET / 200 in 653ms (next.js: 13ms, application-code: 640ms)
+ GET / 200 in 677ms (next.js: 17ms, application-code: 660ms)
+ GET /admin/dashboard 404 in 551ms (next.js: 52ms, application-code: 500ms)
+ GET /admin/donations 404 in 259ms (next.js: 61ms, application-code: 198ms)
+ GET / 200 in 654ms (next.js: 162ms, application-code: 492ms)

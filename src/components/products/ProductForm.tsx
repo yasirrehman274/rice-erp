@@ -3,6 +3,7 @@ import { Save } from "lucide-react";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import type { Product, ProductFormValues } from "@/types/product";
+import LoadingSpinner from "@/components/ui/LoadingSpinner";
 import { productService } from "@/services/product.service";
 const categories = [
   "Super Kernel Basmati",
@@ -222,10 +223,19 @@ export default function ProductForm({ product }: { product?: Product }) {
         <button
           type="submit"
           disabled={saved}
+          aria-busy={saved}
           className="inline-flex items-center gap-2 rounded-xl bg-emerald-600 px-5 py-2.5 text-sm font-semibold text-white shadow-lg shadow-emerald-600/20 hover:bg-emerald-700 disabled:opacity-70"
         >
           <Save size={16} />
-          {saved ? "Saving..." : product ? "Update product" : "Save product"}
+          {saved ? (
+            <>
+              <LoadingSpinner size={16} /> Saving...
+            </>
+          ) : product ? (
+            "Update product"
+          ) : (
+            "Save product"
+          )}
         </button>
       </div>
     </form>

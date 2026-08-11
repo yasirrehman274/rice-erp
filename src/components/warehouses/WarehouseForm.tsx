@@ -3,6 +3,7 @@ import { Save } from "lucide-react";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import type { Warehouse, WarehouseFormValues } from "@/types/warehouse";
+import LoadingSpinner from "@/components/ui/LoadingSpinner";
 import { ApiError } from "@/lib/api";
 import { warehouseService } from "@/services/warehouse.service";
 const empty: WarehouseFormValues = {
@@ -188,14 +189,19 @@ export default function WarehouseForm({
         </button>
         <button
           disabled={saved || saving}
+          aria-busy={saved || saving}
           className="inline-flex items-center justify-center gap-2 rounded-xl bg-emerald-600 px-5 py-2.5 text-sm font-semibold text-white shadow-lg shadow-emerald-600/20 disabled:opacity-70"
         >
           <Save size={17} />
-          {saved || saving
-            ? "Saving..."
-            : warehouse
-              ? "Update warehouse"
-              : "Save warehouse"}
+          {saved || saving ? (
+            <>
+              <LoadingSpinner size={16} /> Saving...
+            </>
+          ) : warehouse ? (
+            "Update warehouse"
+          ) : (
+            "Save warehouse"
+          )}
         </button>
       </div>
     </form>

@@ -4,6 +4,7 @@ import { Factory, Plus, Save, Trash2 } from "lucide-react";
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import type { Production, ProductionFormValues, ProductionMaterialInput } from "@/types/production";
+import LoadingSpinner from "@/components/ui/LoadingSpinner";
 import type { Warehouse } from "@/types/warehouse";
 import type { Product } from "@/types/product";
 import type { InventoryItem } from "@/types/inventory";
@@ -418,10 +419,19 @@ export default function ProductionForm({ production }: { production?: Production
         <button
           type="submit"
           disabled={saved}
+          aria-busy={saved}
           className="inline-flex items-center gap-2 rounded-xl bg-emerald-600 px-5 py-2.5 text-sm font-semibold text-white shadow-lg shadow-emerald-600/20 hover:bg-emerald-700 disabled:opacity-70"
         >
           <Save size={16} />
-          {saved ? "Saving..." : production ? "Update production" : "Save production"}
+          {saved ? (
+            <>
+              <LoadingSpinner size={16} /> Saving...
+            </>
+          ) : production ? (
+            "Update production"
+          ) : (
+            "Save production"
+          )}
         </button>
       </div>
     </form>

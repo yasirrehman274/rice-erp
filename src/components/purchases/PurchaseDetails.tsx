@@ -3,6 +3,7 @@
 import { AlertTriangle, Calendar, CheckCircle, Clock, Package, Truck, WalletCards } from "lucide-react";
 import Link from "next/link";
 import { formatCurrency, formatDate } from "@/lib/utils";
+import { purchaseService } from "@/services/purchase.service";
 import type { Purchase, PurchasePayment } from "@/types/purchase";
 import { PurchaseStatusBadge, PurchasePaymentBadge } from "./PurchaseStatusBadge";
 
@@ -20,7 +21,7 @@ export default function PurchaseDetails({ purchase, payments }: { purchase: Purc
             </div>
             <p className="mt-1 text-sm text-slate-500">Created on {formatDate(purchase.createdAt)}</p>
             <div className="mt-5 grid gap-3 text-sm text-slate-600 sm:grid-cols-2 dark:text-slate-400">
-              <p className="flex items-center gap-2"><Package size={16} />{purchase.productName}</p>
+              <p className="flex items-center gap-2"><Package size={16} />{purchaseService.purchaseProductSummary(purchase)}</p>
               <p className="flex items-center gap-2"><Truck size={16} />{purchase.supplierName}</p>
               <p className="flex items-center gap-2"><Calendar size={16} />{formatDate(purchase.purchaseDate)}</p>
               <p className="flex items-center gap-2"><WalletCards size={16} />{purchase.batchNumber || "N/A"}</p>
@@ -33,10 +34,44 @@ export default function PurchaseDetails({ purchase, payments }: { purchase: Purc
           <div className="mt-4 grid gap-4 sm:grid-cols-2">
             <DetailRow label="Warehouse" value={purchase.warehouseName} />
             <DetailRow label="Rice variety" value={purchase.riceVariety || "N/A"} />
-            <DetailRow label="Quantity" value={`${purchase.quantity} bags`} />
+            <DetailRow label="Quantity" value={`${purchaseService.purchaseTotalBags(purchase)} bags`} />
             <DetailRow label="Bag weight" value={`${purchase.bagWeight} KG`} />
             <DetailRow label="Total weight" value={`${new Intl.NumberFormat("en-PK").format(purchase.totalWeight)} KG`} />
             <DetailRow label="Purchase rate" value={`Rs. ${new Intl.NumberFormat("en-PK").format(purchase.purchaseRate)}/KG`} />
+          </div>
+        </div>
+
+        <div className="mt-6 border-t border-slate-100 pt-5 dark:border-slate-800">
+          <h3 className="text-sm font-semibold">Line items</h3>
+          <div className="mt-4 overflow-x-auto rounded-xl border border-slate-200/80 dark:border-slate-800">
+            <table className="w-full min-w-[760px] text-left text-sm">
+              <thead className="bg-slate-50 text-xs uppercase tracking-wide text-slate-500 dark:bg-slate-800/40">
+                <tr>
+                  <th className="px-4 py-2.5">Product</th>
+                  <th className="px-4 py-2.5">Batch</th>
+                  <th className="px-4 py-2.5 text-right">Qty</th>
+                  <th className="px-4 py-2.5 text-right">Bag Wt</th>
+                  <th className="px-4 py-2.5 text-right">Total Wt</th>
+                  <th className="px-4 py-2.5 text-right">Price / Bag</th>
+                  <th className="px-4 py-2.5 text-right">Rate / KG</th>
+                  <th className="px-4 py-2.5 text-right">Line Total</th>
+                </tr>
+              </thead>
+              <tbody>
+                {purchaseService.purchaseItems(purchase).map((item) => (
+                  <tr key={item.id} className="border-b border-slate-100 last:border-0 dark:border-slate-800">
+                    <td className="px-4 py-3 font-medium">{item.productName}</td>
+                    <td className="px-4 py-3 text-slate-500">{item.batchNumber || "—"}</td>
+                    <td className="px-4 py-3 text-right">{item.quantity}</td>
+                    <td className="px-4 py-3 text-right">{item.bagWeight} KG</td>
+                    <td className="px-4 py-3 text-right">{new Intl.NumberFormat("en-PK").format(item.totalWeight)} KG</td>
+                    <td className="px-4 py-3 text-right">{formatCurrency(item.currentPurchasePrice)}</td>
+                    <td className="px-4 py-3 text-right">{formatCurrency(item.purchaseRate)}/KG</td>
+                    <td className="px-4 py-3 text-right font-semibold">{formatCurrency(item.subtotal)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
         </div>
 

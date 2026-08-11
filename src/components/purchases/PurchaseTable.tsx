@@ -74,7 +74,7 @@ export default function PurchaseTable({
             (status === "all" || purchase.status === status) &&
             (paymentStatus === "all" ||
               purchase.paymentStatus === paymentStatus) &&
-            `${purchase.purchaseNumber} ${purchase.supplierName} ${purchase.productName} ${purchase.warehouseName}`
+            `${purchase.purchaseNumber} ${purchase.supplierName} ${purchase.warehouseName} ${purchaseService.purchaseProductSummary(purchase)} ${(purchase.items ?? []).map((item) => item.productName).join(" ")}`
               .toLowerCase()
               .includes(query.toLowerCase()),
         )
@@ -250,10 +250,10 @@ export default function PurchaseTable({
                         {purchase.supplierName}
                       </td>
                       <td className="px-4 py-4 text-slate-500">
-                        {purchase.productName}
+                        {purchaseService.purchaseProductSummary(purchase)}
                       </td>
                       <td className="px-4 py-4 text-right">
-                        {purchase.quantity} bags
+                        {purchaseService.purchaseTotalBags(purchase)} bags
                       </td>
                       <td className="px-4 py-4 text-right font-medium">
                         {formatCurrency(purchase.grandTotal)}

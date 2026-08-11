@@ -3,6 +3,7 @@ import { Save } from "lucide-react";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import type { Customer, CustomerFormValues } from "@/types/customer";
+import LoadingSpinner from "@/components/ui/LoadingSpinner";
 import { customerService } from "@/services/customer.service";
 const empty: CustomerFormValues = {
   name: "",
@@ -216,10 +217,19 @@ export default function CustomerForm({ customer }: { customer?: Customer }) {
         </button>
         <button
           disabled={saved}
+          aria-busy={saved}
           className="inline-flex items-center justify-center gap-2 rounded-xl bg-emerald-600 px-5 py-2.5 text-sm font-semibold text-white shadow-lg shadow-emerald-600/20 hover:bg-emerald-700 disabled:opacity-70"
         >
           <Save size={17} />
-          {saved ? "Saving..." : customer ? "Update customer" : "Save customer"}
+          {saved ? (
+            <>
+              <LoadingSpinner size={16} /> Saving...
+            </>
+          ) : customer ? (
+            "Update customer"
+          ) : (
+            "Save customer"
+          )}
         </button>
       </div>
     </form>

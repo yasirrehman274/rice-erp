@@ -3,21 +3,34 @@
 import { CheckCircle, Truck, X } from "lucide-react";
 import { useState } from "react";
 import type { Purchase } from "@/types/purchase";
+import LoadingSpinner from "@/components/ui/LoadingSpinner";
 
 interface PurchaseReceivingDialogProps { purchase: Purchase | null; open: boolean; onClose: () => void; onConfirm: (receivedBy: string, notes: string) => void; }
 
 export default function PurchaseReceivingDialog({ purchase, open, onClose, onConfirm }: PurchaseReceivingDialogProps) {
   const [receivedBy, setReceivedBy] = useState("");
   const [notes, setNotes] = useState("");
+  const [processing, setProcessing] = useState(false);
+  const [prevOpen, setPrevOpen] = useState(open);
+  if (open !== prevOpen) {
+    setPrevOpen(open);
+    if (open) setProcessing(false);
+  }
 
   if (!open || !purchase) return null;
 
-  function submit(event: React.FormEvent<HTMLFormElement>) {
+  async function submit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (processing) return;
     if (!receivedBy.trim()) return;
-    onConfirm(receivedBy, notes);
-    setReceivedBy("");
-    setNotes("");
+    setProcessing(true);
+    try {
+      await onConfirm(receivedBy, notes);
+      setReceivedBy("");
+      setNotes("");
+    } finally {
+      setProcessing(false);
+    }
   }
 
   return <div className="fixed inset-0 z-50 grid place-items-center bg-slate-950/50 p-4" role="dialog" aria-modal="true"><div className="w-full max-w-lg rounded-2xl bg-white p-6 shadow-2xl dark:bg-slate-900">
@@ -27,7 +40,7 @@ export default function PurchaseReceivingDialog({ purchase, open, onClose, onCon
     <form onSubmit={submit} className="mt-5 space-y-4">
       <label><span className="mb-2 block text-sm font-medium">Received by <span className="text-rose-600">*</span></span><input value={receivedBy} onChange={(event) => setReceivedBy(event.target.value)} placeholder="e.g. Muhammad Asif" className="h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm outline-none focus:border-emerald-500 focus:ring-4 focus:ring-emerald-500/10 dark:border-slate-700 dark:bg-slate-800" /></label>
       <label><span className="mb-2 block text-sm font-medium">Receiving notes</span><textarea value={notes} onChange={(event) => setNotes(event.target.value)} placeholder="Any observations..." rows={3} className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm outline-none focus:border-emerald-500 focus:ring-4 focus:ring-emerald-500/10 dark:border-slate-700 dark:bg-slate-800" /></label>
-      <div className="flex justify-end gap-3 pt-2"><button type="button" onClick={onClose} className="rounded-xl border border-slate-200 px-4 py-2.5 text-sm font-semibold hover:bg-slate-50 dark:border-slate-700 dark:hover:bg-slate-800">Cancel</button><button type="submit" className="inline-flex items-center gap-2 rounded-xl bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-emerald-700"><CheckCircle size={16} />Confirm receipt</button></div>
+      <div className="flex justify-end gap-3 pt-2"><button type="button" onClick={onClose} disabled={processing} className="rounded-xl border border-slate-200 px-4 py-2.5 text-sm font-semibold hover:bg-slate-50 disabled:opacity-50 dark:border-slate-700 dark:hover:bg-slate-800">Cancel</button><button type="submit" disabled={processing} aria-busy={processing} className="inline-flex items-center gap-2 rounded-xl bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-emerald-700 disabled:opacity-70">{processing ? <><LoadingSpinner size={16} /> Processing...</> : <><CheckCircle size={16} />Confirm receipt</>}</button></div>
     </form>
   </div></div>;
 }

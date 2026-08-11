@@ -1,4 +1,5 @@
 import "./globals.css";
+import NavigationProgress from "@/components/ui/NavigationProgress";
 
 export const metadata = {
   title: "Rice ERP",
@@ -12,7 +13,10 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en">
-      <body>{children}</body>
+      <body>
+        <NavigationProgress />
+        {children}
+      </body>
     </html>
   );
 }

@@ -173,7 +173,7 @@ async function transferStock(item: InventoryItem, values: StockTransferValues): 
 }
 
 function getStockLedger(item: InventoryItem): StockLedgerEntry[] {
-  type MiniPurchase = { id: string; purchaseNumber: string; purchaseDate: string; productId: string; warehouseId: string; quantity: number };
+  type MiniPurchase = { id: string; purchaseNumber: string; purchaseDate: string; productId: string; warehouseId: string; quantity: number; items?: { productId: string; quantity: number }[] };
   type MiniSale = { id: string; saleNumber: string; saleDate: string; productId: string; warehouseId: string; quantity: number };
   type MiniMaterial = { productId: string; warehouseId: string; quantityUsed: number };
   type MiniProduction = { id: string; productionNumber: string; productionDate: string; warehouseId: string; outputProductId: string; outputBags: number; materials: MiniMaterial[] };
@@ -182,8 +182,14 @@ function getStockLedger(item: InventoryItem): StockLedgerEntry[] {
   const sales = saleService.getAll() as MiniSale[];
   const productions = productionService.getAll() as MiniProduction[];
   const movements: MiniMovement[] = [];
-  purchases.filter((p) => p.productId === item.productId && p.warehouseId === item.warehouseId)
-    .forEach((p) => movements.push({ id: `led-p-${p.id}`, date: p.purchaseDate, type: "purchase", description: "Purchase receipt", reference: p.purchaseNumber, stockIn: p.quantity, stockOut: 0 }));
+  purchases.filter((p) => p.warehouseId === item.warehouseId)
+    .forEach((p) => {
+      const lines = Array.isArray(p.items) && p.items.length > 0 ? p.items : [{ productId: p.productId, quantity: p.quantity }];
+      lines.forEach((line) => {
+        if (line.productId !== item.productId || !line.quantity) return;
+        movements.push({ id: `led-p-${p.id}-${line.productId}`, date: p.purchaseDate, type: "purchase", description: "Purchase receipt", reference: p.purchaseNumber, stockIn: line.quantity, stockOut: 0 });
+      });
+    });
   productions.filter((p) => p.warehouseId === item.warehouseId && p.outputProductId === item.productId && p.outputBags > 0)
     .forEach((p) => movements.push({ id: `led-pi-${p.id}`, date: p.productionDate, type: "production-in", description: "Production output", reference: p.productionNumber, stockIn: p.outputBags, stockOut: 0 }));
   productions.forEach((p) => p.materials.filter((m) => m.warehouseId === item.warehouseId && m.productId === item.productId)

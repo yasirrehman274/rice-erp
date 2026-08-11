@@ -2,6 +2,20 @@ export type PurchaseStatus = "pending" | "received" | "partial" | "cancelled";
 export type PurchasePaymentStatus = "unpaid" | "partial" | "paid";
 export type PurchasePaymentMethod = "cash" | "bank" | "cheque" | "online";
 
+export interface PurchaseItem {
+  id: string;
+  productId: string;
+  productName: string;
+  quantity: number;
+  bagWeight: number;
+  totalWeight: number;
+  currentPurchasePrice: number;
+  purchaseRate: number;
+  subtotal: number;
+  batchNumber: string;
+  riceVariety: string;
+}
+
 export interface Purchase {
   id: string;
   purchaseNumber: string;
@@ -35,6 +49,19 @@ export interface Purchase {
   updatedAt: string;
   receivedDate?: string;
   receivedBy?: string;
+  items?: PurchaseItem[];
+}
+
+export interface PurchaseItemForm {
+  id: string;
+  productId: string;
+  quantity: string;
+  bagWeight: string;
+  currentPurchasePrice: string;
+  lastPurchasePrice: string;
+  suggestedSalePrice: string;
+  batchNumber: string;
+  riceVariety: string;
 }
 
 export interface PurchaseFormValues {
@@ -42,19 +69,10 @@ export interface PurchaseFormValues {
   purchaseDate: string;
   supplierId: string;
   warehouseId: string;
-  productId: string;
-  batchNumber: string;
-  riceVariety: string;
-  quantity: string;
-  bagWeight: string;
-  totalWeight: string;
-  currentPurchasePrice: string;
-  purchaseRate: string;
-  subtotal: string;
+  items: PurchaseItemForm[];
   discount: string;
   transportCharges: string;
   otherCharges: string;
-  grandTotal: string;
   paidAmount: string;
   paymentMethod: PurchasePaymentMethod;
   status: PurchaseStatus;

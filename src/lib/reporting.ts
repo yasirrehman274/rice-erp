@@ -1,5 +1,5 @@
 import type { Sale, SaleItem } from "@/types/sale";
-import type { Purchase } from "@/types/purchase";
+import type { Purchase, PurchaseItem } from "@/types/purchase";
 import type { Expense } from "@/types/expense";
 import type { InventoryItem } from "@/types/inventory";
 import type { Product } from "@/types/product";
@@ -100,6 +100,25 @@ export function saleItems(sale: Sale): SaleItem[] {
 
 export function isActiveSale(sale: Sale): boolean {
   return sale.status !== "cancelled";
+}
+
+export function purchaseItems(purchase: Purchase): PurchaseItem[] {
+  if (Array.isArray(purchase.items) && purchase.items.length > 0) return purchase.items;
+  return [
+    {
+      id: `${purchase.id}-item`,
+      productId: purchase.productId,
+      productName: purchase.productName,
+      quantity: Number(purchase.quantity) || 0,
+      bagWeight: Number(purchase.bagWeight) || 0,
+      totalWeight: Number(purchase.totalWeight) || 0,
+      currentPurchasePrice: Number(purchase.currentPurchasePrice) || 0,
+      purchaseRate: Number(purchase.purchaseRate) || 0,
+      subtotal: Number(purchase.subtotal) || 0,
+      batchNumber: purchase.batchNumber ?? "",
+      riceVariety: purchase.riceVariety ?? "",
+    },
+  ];
 }
 
 export function isActivePurchase(purchase: Purchase): boolean {
@@ -246,10 +265,12 @@ export function calcInventoryReport(input: {
 
   for (const purchase of purchases) {
     if (!isActivePurchase(purchase) || !inRange(purchase.purchaseDate, range)) continue;
-    track(purchase.productId);
-    const entry = movements.get(purchase.productId)!;
-    entry.purchases += Number(purchase.quantity) || 0;
-    names.set(purchase.productId, purchase.productName || names.get(purchase.productId) || "");
+    for (const item of purchaseItems(purchase)) {
+      track(item.productId);
+      const entry = movements.get(item.productId)!;
+      entry.purchases += Number(item.quantity) || 0;
+      names.set(item.productId, item.productName || names.get(item.productId) || "");
+    }
   }
 
   for (const production of productions) {

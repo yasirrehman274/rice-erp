@@ -12,6 +12,7 @@ import {
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
+import LoadingSpinner from "@/components/ui/LoadingSpinner";
 import type { Customer } from "@/types/customer";
 import type { Product } from "@/types/product";
 import type { Warehouse } from "@/types/warehouse";
@@ -776,16 +777,25 @@ export default function SaleForm({ sale }: { sale?: Sale }) {
 
           <button
             type="submit"
-            disabled={hasStockErrors}
+            disabled={hasStockErrors || saved}
+            aria-busy={saved}
             title={
-              hasStockErrors
+              hasStockErrors && !saved
                 ? "Reduce requested quantities to fit inventory"
                 : undefined
             }
             className="mt-6 flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 font-bold text-white shadow-lg shadow-emerald-500/25 transition-all hover:from-emerald-500 hover:to-teal-500 active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-40 dark:shadow-emerald-900/30"
           >
             <Save size={18} />
-            {sale ? "Update Sale Record" : "Finalize & Save Sale"}
+            {saved ? (
+              <>
+                <LoadingSpinner size={16} /> Saving...
+              </>
+            ) : sale ? (
+              "Update Sale Record"
+            ) : (
+              "Finalize & Save Sale"
+            )}
           </button>
         </aside>
       </section>

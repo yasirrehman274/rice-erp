@@ -4,6 +4,7 @@ import { Save } from "lucide-react";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import type { Supplier, SupplierFormValues } from "@/types/supplier";
+import LoadingSpinner from "@/components/ui/LoadingSpinner";
 import { ApiError } from "@/lib/api";
 import { supplierService } from "@/services/supplier.service";
 
@@ -134,8 +135,8 @@ export default function SupplierForm({ supplier }: { supplier?: Supplier }) {
       )}
       <div className="flex flex-col-reverse justify-end gap-3 sm:flex-row">
         <button type="button" onClick={() => router.back()} className="rounded-xl border border-slate-200 px-5 py-2.5 text-sm font-semibold hover:bg-slate-50 dark:border-slate-700 dark:hover:bg-slate-800">Cancel</button>
-        <button type="submit" disabled={saved || saving} className="inline-flex items-center justify-center gap-2 rounded-xl bg-emerald-600 px-5 py-2.5 text-sm font-semibold text-white shadow-lg shadow-emerald-600/20 hover:bg-emerald-700 disabled:opacity-70">
-          <Save size={17} />{saved || saving ? "Saving..." : supplier ? "Update supplier" : "Save supplier"}
+        <button type="submit" disabled={saved || saving} aria-busy={saved || saving} className="inline-flex items-center justify-center gap-2 rounded-xl bg-emerald-600 px-5 py-2.5 text-sm font-semibold text-white shadow-lg shadow-emerald-600/20 hover:bg-emerald-700 disabled:opacity-70">
+          <Save size={17} />{saved || saving ? <><LoadingSpinner size={16} /> Saving...</> : supplier ? "Update supplier" : "Save supplier"}
         </button>
       </div>
     </form>

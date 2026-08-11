@@ -3,6 +3,7 @@
 import { DollarSign, X } from "lucide-react";
 import { useState } from "react";
 import type { Sale, SalePaymentMethod } from "@/types/sale";
+import LoadingSpinner from "@/components/ui/LoadingSpinner";
 
 interface SalePaymentDialogProps { sale: Sale | null; open: boolean; onClose: () => void; onConfirm: (amount: number, method: SalePaymentMethod, notes: string) => void; }
 
@@ -10,6 +11,12 @@ export default function SalePaymentDialog({ sale, open, onClose, onConfirm }: Sa
   const [amount, setAmount] = useState("");
   const [method, setMethod] = useState<SalePaymentMethod>("cash");
   const [notes, setNotes] = useState("");
+  const [processing, setProcessing] = useState(false);
+  const [prevOpen, setPrevOpen] = useState(open);
+  if (open !== prevOpen) {
+    setPrevOpen(open);
+    if (open) setProcessing(false);
+  }
 
   if (!open || !sale) return null;
 
@@ -26,13 +33,19 @@ export default function SalePaymentDialog({ sale, open, onClose, onConfirm }: Sa
     setAmount(String(Math.min(Math.max(0, numericValue), sale.remainingBalance)));
   };
 
-  const submit = (event: React.FormEvent<HTMLFormElement>) => {
+  const submit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
+    if (processing) return;
     const numAmount = Number(amount);
     if (!numAmount || numAmount <= 0 || numAmount > sale.remainingBalance) return;
-    onConfirm(numAmount, method, notes);
-    setAmount("");
-    setNotes("");
+    setProcessing(true);
+    try {
+      await onConfirm(numAmount, method, notes);
+      setAmount("");
+      setNotes("");
+    } finally {
+      setProcessing(false);
+    }
   };
 
   return <div className="fixed inset-0 z-50 grid place-items-center bg-slate-950/50 p-4" role="dialog" aria-modal="true"><div className="w-full max-w-lg rounded-2xl bg-white p-6 shadow-2xl dark:bg-slate-900">
@@ -47,7 +60,7 @@ export default function SalePaymentDialog({ sale, open, onClose, onConfirm }: Sa
       <label><span className="mb-2 block text-sm font-medium">Amount <span className="text-rose-600">*</span></span><input type="number" min="1" max={sale.remainingBalance} value={amount} onChange={(event) => updateAmount(event.target.value)} placeholder="0" className="h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm outline-none focus:border-emerald-500 focus:ring-4 focus:ring-emerald-500/10 dark:border-slate-700 dark:bg-slate-800" /><span className="mt-2 block text-xs text-slate-500">Outstanding after payment: <span className="font-semibold text-emerald-600">Rs. {new Intl.NumberFormat("en-PK").format(remainingAfterPayment)}</span></span></label>
       <label><span className="mb-2 block text-sm font-medium">Payment method</span><select value={method} onChange={(event) => setMethod(event.target.value as SalePaymentMethod)} className="h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm outline-none focus:border-emerald-500 dark:border-slate-700 dark:bg-slate-800"><option value="cash">Cash</option><option value="bank">Bank Transfer</option><option value="cheque">Cheque</option><option value="online">Online</option></select></label>
       <label><span className="mb-2 block text-sm font-medium">Notes</span><textarea value={notes} onChange={(event) => setNotes(event.target.value)} placeholder="Payment reference or notes..." rows={2} className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm outline-none focus:border-emerald-500 focus:ring-4 focus:ring-emerald-500/10 dark:border-slate-700 dark:bg-slate-800" /></label>
-      <div className="flex justify-end gap-3 pt-2"><button type="button" onClick={onClose} className="rounded-xl border border-slate-200 px-4 py-2.5 text-sm font-semibold hover:bg-slate-50 dark:border-slate-700 dark:hover:bg-slate-800">Cancel</button><button type="submit" className="inline-flex items-center gap-2 rounded-xl bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-emerald-700"><DollarSign size={16} />Record payment</button></div>
+      <div className="flex justify-end gap-3 pt-2"><button type="button" onClick={onClose} disabled={processing} className="rounded-xl border border-slate-200 px-4 py-2.5 text-sm font-semibold hover:bg-slate-50 disabled:opacity-50 dark:border-slate-700 dark:hover:bg-slate-800">Cancel</button><button type="submit" disabled={processing} aria-busy={processing} className="inline-flex items-center gap-2 rounded-xl bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-emerald-700 disabled:opacity-70">{processing ? <><LoadingSpinner size={16} /> Recording...</> : <><DollarSign size={16} />Record payment</>}</button></div>
     </form>
   </div></div>;
 }

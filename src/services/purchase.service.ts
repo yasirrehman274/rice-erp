@@ -1,4 +1,4 @@
-import type { Purchase, PurchasePayment, PurchaseHistoryEntry, PurchaseFormValues } from "@/types/purchase";
+import type { Purchase, PurchaseItem, PurchasePayment, PurchaseHistoryEntry, PurchaseFormValues } from "@/types/purchase";
 import { getItem, setItem, ensureSeeded } from "@/lib/storage";
 import { seedAll } from "@/utils/seed";
 import { apiRequest } from "@/lib/api";
@@ -38,18 +38,43 @@ function nextId(existing: Purchase[]): string {
   return `pur-${String(n).padStart(3, "0")}`;
 }
 
-function resolveNames(values: PurchaseFormValues): { supplierName: string; warehouseName: string; productName: string } {
+function resolveNames(values: PurchaseFormValues): { supplierName: string; warehouseName: string } {
   const supplier = supplierService.getById(values.supplierId);
   const warehouse = warehouseService.getById(values.warehouseId);
-  const product = productService.getById(values.productId);
-  return { supplierName: supplier?.name ?? "", warehouseName: warehouse?.name ?? "", productName: product?.productName ?? "" };
+  return { supplierName: supplier?.name ?? "", warehouseName: warehouse?.name ?? "" };
+}
+
+function toPurchaseItems(values: PurchaseFormValues): PurchaseItem[] {
+  return values.items.map((item) => {
+    const quantity = Number(item.quantity) || 0;
+    const bagWeight = Number(item.bagWeight) || 0;
+    const price = Number(item.currentPurchasePrice) || 0;
+    const totalWeight = quantity * bagWeight;
+    const product = productService.getById(item.productId);
+    return {
+      id: item.id,
+      productId: item.productId,
+      productName: product?.productName ?? "",
+      quantity,
+      bagWeight,
+      totalWeight,
+      currentPurchasePrice: price,
+      purchaseRate: totalWeight > 0 ? (price * quantity) / totalWeight : 0,
+      subtotal: quantity * price,
+      batchNumber: item.batchNumber,
+      riceVariety: item.riceVariety,
+    };
+  });
 }
 
 function toPurchase(values: PurchaseFormValues, id: string): Purchase {
   const now = new Date().toISOString().slice(0, 10);
   const names = resolveNames(values);
-  const grandTotal = Number(values.grandTotal) || 0;
+  const items = toPurchaseItems(values);
+  const subtotal = items.reduce((sum, item) => sum + item.subtotal, 0);
+  const grandTotal = subtotal - (Number(values.discount) || 0) + (Number(values.transportCharges) || 0) + (Number(values.otherCharges) || 0);
   const paidAmount = Number(values.paidAmount) || 0;
+  const first = items[0];
   return {
     id,
     purchaseNumber: values.purchaseNumber,
@@ -58,16 +83,17 @@ function toPurchase(values: PurchaseFormValues, id: string): Purchase {
     supplierName: names.supplierName,
     warehouseId: values.warehouseId,
     warehouseName: names.warehouseName,
-    productId: values.productId,
-    productName: names.productName,
-    batchNumber: values.batchNumber,
-    riceVariety: values.riceVariety,
-    quantity: Number(values.quantity) || 0,
-    bagWeight: Number(values.bagWeight) || 0,
-    totalWeight: Number(values.totalWeight) || 0,
-    currentPurchasePrice: Number(values.currentPurchasePrice) || 0,
-    purchaseRate: Number(values.purchaseRate) || 0,
-    subtotal: Number(values.subtotal) || 0,
+    productId: first.productId,
+    productName: first.productName,
+    batchNumber: first.batchNumber,
+    riceVariety: first.riceVariety,
+    quantity: first.quantity,
+    bagWeight: first.bagWeight,
+    totalWeight: first.totalWeight,
+    currentPurchasePrice: first.currentPurchasePrice,
+    purchaseRate: first.purchaseRate,
+    subtotal,
+    items,
     discount: Number(values.discount) || 0,
     transportCharges: Number(values.transportCharges) || 0,
     otherCharges: Number(values.otherCharges) || 0,
@@ -81,6 +107,33 @@ function toPurchase(values: PurchaseFormValues, id: string): Purchase {
     createdAt: now,
     updatedAt: now,
   };
+}
+
+export function purchaseItems(purchase: Purchase): PurchaseItem[] {
+  if (Array.isArray(purchase.items) && purchase.items.length > 0) return purchase.items;
+  return [{
+    id: `${purchase.id}-item`,
+    productId: purchase.productId,
+    productName: purchase.productName,
+    quantity: Number(purchase.quantity) || 0,
+    bagWeight: Number(purchase.bagWeight) || 0,
+    totalWeight: Number(purchase.totalWeight) || 0,
+    currentPurchasePrice: Number(purchase.currentPurchasePrice) || 0,
+    purchaseRate: Number(purchase.purchaseRate) || 0,
+    subtotal: Number(purchase.subtotal) || 0,
+    batchNumber: purchase.batchNumber ?? "",
+    riceVariety: purchase.riceVariety ?? "",
+  }];
+}
+
+export function purchaseTotalBags(purchase: Purchase): number {
+  return purchaseItems(purchase).reduce((sum, item) => sum + (Number(item.quantity) || 0), 0);
+}
+
+export function purchaseProductSummary(purchase: Purchase): string {
+  const items = purchaseItems(purchase);
+  if (items.length <= 1) return items[0]?.productName ?? purchase.productName;
+  return `${items[0].productName} +${items.length - 1} more`;
 }
 
 function replaceRecord(record: Purchase): void {
@@ -275,8 +328,8 @@ function getPurchaseHistory(): PurchaseHistoryEntry[] {
     purchaseNumber: purchase.purchaseNumber,
     date: purchase.purchaseDate,
     supplierName: purchase.supplierName,
-    productName: purchase.productName,
-    quantity: purchase.quantity,
+    productName: purchaseProductSummary(purchase),
+    quantity: purchaseTotalBags(purchase),
     amount: purchase.grandTotal,
     status: purchase.status,
     paymentStatus: purchase.paymentStatus,
@@ -292,6 +345,9 @@ export const purchaseService = {
   search,
   filter,
   count,
+  purchaseItems,
+  purchaseTotalBags,
+  purchaseProductSummary,
   fetchPurchasePayments,
   fetchAddPayment,
   fetchUpdatePayment,

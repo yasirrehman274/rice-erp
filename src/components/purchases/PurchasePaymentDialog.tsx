@@ -3,6 +3,7 @@
 import { DollarSign, X } from "lucide-react";
 import { useState } from "react";
 import type { Purchase, PurchasePayment, PurchasePaymentMethod } from "@/types/purchase";
+import LoadingSpinner from "@/components/ui/LoadingSpinner";
 
 interface PurchasePaymentDialogProps {
   purchase: Purchase | null;
@@ -26,6 +27,12 @@ export default function PurchasePaymentDialog({
   const [amount, setAmount] = useState(payment ? String(payment.amount) : "");
   const [method, setMethod] = useState<PurchasePaymentMethod>(payment?.method ?? "cash");
   const [notes, setNotes] = useState(payment?.notes ?? "");
+  const [processing, setProcessing] = useState(false);
+  const [prevOpen, setPrevOpen] = useState(open);
+  if (open !== prevOpen) {
+    setPrevOpen(open);
+    if (open) setProcessing(false);
+  }
 
   if (!open || !purchase) return null;
 
@@ -44,13 +51,19 @@ export default function PurchasePaymentDialog({
     setAmount(String(Math.min(Math.max(0, numericValue), maxAmount)));
   }
 
-  function submit(event: React.FormEvent<HTMLFormElement>) {
+  async function submit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (processing) return;
     const numAmount = Number(amount);
     if (!numAmount || numAmount <= 0 || numAmount > maxAmount) return;
-    onConfirm(numAmount, method, notes);
-    setAmount("");
-    setNotes("");
+    setProcessing(true);
+    try {
+      await onConfirm(numAmount, method, notes);
+      setAmount("");
+      setNotes("");
+    } finally {
+      setProcessing(false);
+    }
   }
 
   return (
@@ -138,16 +151,27 @@ export default function PurchasePaymentDialog({
             <button
               type="button"
               onClick={onClose}
-              className="rounded-xl border border-slate-200 px-4 py-2.5 text-sm font-semibold hover:bg-slate-50 dark:border-slate-700 dark:hover:bg-slate-800"
+              disabled={processing}
+              className="rounded-xl border border-slate-200 px-4 py-2.5 text-sm font-semibold hover:bg-slate-50 disabled:opacity-50 dark:border-slate-700 dark:hover:bg-slate-800"
             >
               Cancel
             </button>
             <button
               type="submit"
-              className="inline-flex items-center gap-2 rounded-xl bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-emerald-700"
+              disabled={processing}
+              aria-busy={processing}
+              className="inline-flex items-center gap-2 rounded-xl bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-emerald-700 disabled:opacity-70"
             >
-              <DollarSign size={16} />
-              {editing ? "Update payment" : "Record payment"}
+              {processing ? (
+                <>
+                  <LoadingSpinner size={16} /> {editing ? "Updating..." : "Recording..."}
+                </>
+              ) : (
+                <>
+                  <DollarSign size={16} />
+                  {editing ? "Update payment" : "Record payment"}
+                </>
+              )}
             </button>
           </div>
         </form>
