@@ -1,8 +1,8 @@
 "use client";
-import { Download, FileText, Plus, RefreshCw } from "lucide-react"; import Link from "next/link"; import { useState } from "react"; import type { Customer } from "@/types/customer"; import LoadingSpinner from "@/components/ui/LoadingSpinner";
+import { Download, FileText, Plus, RefreshCw } from "lucide-react"; import Link from "next/link"; import { useState } from "react"; import type { Customer } from "@/types/customer"; import { CUSTOMER_TYPE_LABELS } from "@/types/customer"; import LoadingSpinner from "@/components/ui/LoadingSpinner";
 export default function CustomerPageActions({ customers }: { customers: Customer[] }) {
   const [exporting, setExporting] = useState<"pdf" | "excel" | null>(null);
-  function csv() { const rows = ["Customer,Business,Phone,City,Balance", ...customers.map((item) => [item.name, item.businessName, item.phone, item.city, item.currentBalance].map((value) => `"${String(value).replaceAll('"', '""')}"`).join(","))]; const url = URL.createObjectURL(new Blob([rows.join("\n")], { type: "text/csv" })); const link = document.createElement("a"); link.href = url; link.download = "rice-erp-customers.csv"; link.click(); URL.revokeObjectURL(url); }
+  function csv() { const rows = ["Customer,Business,Phone,City,Customer Type,Balance", ...customers.map((item) => [item.name, item.businessName, item.phone, item.city, CUSTOMER_TYPE_LABELS[item.customerType || "market"], item.currentBalance].map((value) => `"${String(value).replaceAll('"', '""')}"`).join(","))]; const url = URL.createObjectURL(new Blob([rows.join("\n")], { type: "text/csv" })); const link = document.createElement("a"); link.href = url; link.download = "rice-erp-customers.csv"; link.click(); URL.revokeObjectURL(url); }
   function handleExport(kind: "pdf" | "excel") {
     if (exporting) return;
     setExporting(kind);

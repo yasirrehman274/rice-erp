@@ -2,7 +2,8 @@
 import { Save } from "lucide-react";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import type { Customer, CustomerFormValues } from "@/types/customer";
+import type { Customer, CustomerFormValues, CustomerType } from "@/types/customer";
+import { CUSTOMER_TYPE_LABELS } from "@/types/customer";
 import LoadingSpinner from "@/components/ui/LoadingSpinner";
 import { customerService } from "@/services/customer.service";
 const empty: CustomerFormValues = {
@@ -18,6 +19,7 @@ const empty: CustomerFormValues = {
   openingBalance: "0",
   creditLimit: "0",
   status: "active",
+  customerType: "market",
   notes: "",
 };
 const inputs: Array<{
@@ -95,6 +97,7 @@ function initial(customer?: Customer): CustomerFormValues {
         openingBalance: String(customer.openingBalance),
         creditLimit: String(customer.creditLimit),
         status: customer.status,
+        customerType: customer.customerType || "market",
         notes: customer.notes ?? "",
       }
     : empty;
@@ -184,6 +187,18 @@ export default function CustomerForm({ customer }: { customer?: Customer }) {
           </p>
         </div>
         <div className="grid gap-5 md:grid-cols-2">
+          <label>
+            <span className="mb-2 block text-sm font-medium">Customer Type <b className="ml-1 text-rose-600">*</b></span>
+            <select
+              value={values.customerType}
+              onChange={(e) => update("customerType", e.target.value as CustomerType)}
+              className="h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm dark:border-slate-700 dark:bg-slate-800"
+            >
+              {(Object.entries(CUSTOMER_TYPE_LABELS) as [CustomerType, string][]).map(([value, label]) => (
+                <option key={value} value={value}>{label}</option>
+              ))}
+            </select>
+          </label>
           <label>
             <span className="mb-2 block text-sm font-medium">Status</span>
             <select
