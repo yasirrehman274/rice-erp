@@ -10,7 +10,8 @@ import {
 import Link from "next/link";
 import { useMemo, useState } from "react";
 import { formatCurrency, formatDate } from "@/lib/utils";
-import type { Customer, CustomerStatus } from "@/types/customer";
+import type { Customer, CustomerStatus, CustomerType } from "@/types/customer";
+import { CUSTOMER_TYPE_LABELS } from "@/types/customer";
 import CustomerCard from "./CustomerCard";
 import DeleteCustomerDialog from "./DeleteCustomerDialog";
 import { customerService } from "@/services/customer.service";
@@ -41,6 +42,7 @@ export default function CustomerTable({
   }
   const [query, setQuery] = useState("");
   const [status, setStatus] = useState<"all" | CustomerStatus>("all");
+  const [typeFilter, setTypeFilter] = useState<"all" | CustomerType>("all");
   const [sort, setSort] = useState<Sort>("createdAt");
   const [up, setUp] = useState(false);
   const [page, setPage] = useState(1);
@@ -51,6 +53,7 @@ export default function CustomerTable({
         .filter(
           (item) =>
             (status === "all" || item.status === status) &&
+            (typeFilter === "all" || (item.customerType || "market") === typeFilter) &&
             `${item.name} ${item.businessName} ${item.phone} ${item.city}`
               .toLowerCase()
               .includes(query.toLowerCase()),
@@ -64,7 +67,7 @@ export default function CustomerTable({
               : String(l).localeCompare(String(r));
           return up ? value : -value;
         }),
-    [customers, query, status, sort, up],
+    [customers, query, status, typeFilter, sort, up],
   );
   const pages = Math.max(1, Math.ceil(results.length / size));
   const current = Math.min(page, pages);
@@ -107,6 +110,18 @@ export default function CustomerTable({
             <option value="active">Active</option>
             <option value="inactive">Inactive</option>
           </select>
+          <select
+            value={typeFilter}
+            onChange={(e) => {
+              setTypeFilter(e.target.value as "all" | CustomerType);
+              setPage(1);
+            }}
+            className="h-10 rounded-xl border border-slate-200 bg-white px-3 text-sm dark:border-slate-700 dark:bg-slate-800"
+          >
+            <option value="all">All customers</option>
+            <option value="market">Market Customers</option>
+            <option value="outsider">Outsider Customers</option>
+          </select>
         </div>
         {rows.length ? (
           <>
@@ -116,6 +131,7 @@ export default function CustomerTable({
                   <tr>
                     {[
                       ["Customer name", "name"],
+                      ["Type", null],
                       ["Business name", null],
                       ["Phone number", null],
                       ["City", "city"],
@@ -157,6 +173,13 @@ export default function CustomerTable({
                         >
                           {item.name}
                         </Link>
+                      </td>
+                      <td className="px-3 py-4">
+                        <span
+                          className={`rounded-full px-2.5 py-1 text-xs font-semibold ${(item.customerType || "market") === "market" ? "bg-emerald-50 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-400" : "bg-blue-50 text-blue-700 dark:bg-blue-500/10 dark:text-blue-400"}`}
+                        >
+                          {CUSTOMER_TYPE_LABELS[item.customerType || "market"]}
+                        </span>
                       </td>
                       <td className="px-3 py-4">{item.businessName}</td>
                       <td className="px-3 py-4 text-slate-500">{item.phone}</td>

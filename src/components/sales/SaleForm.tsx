@@ -14,6 +14,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import LoadingSpinner from "@/components/ui/LoadingSpinner";
 import type { Customer } from "@/types/customer";
+import { CUSTOMER_TYPE_LABELS } from "@/types/customer";
 import type { Product } from "@/types/product";
 import type { Warehouse } from "@/types/warehouse";
 import type { InventoryItem } from "@/types/inventory";
@@ -354,7 +355,7 @@ export default function SaleForm({ sale }: { sale?: Sale }) {
                 .filter((customer) => customer.status === "active")
                 .map((customer) => (
                   <option key={customer.id} value={customer.id}>
-                    {customer.name}
+                    {customer.name} ({CUSTOMER_TYPE_LABELS[customer.customerType || "market"]})
                   </option>
                 ))}
             </select>
@@ -372,6 +373,19 @@ export default function SaleForm({ sale }: { sale?: Sale }) {
             </span>
             <input
               value={selectedCustomer?.phone ?? ""}
+              readOnly
+              placeholder="Select customer first"
+              className={`${inputClass} bg-slate-100/70 text-slate-500 cursor-not-allowed dark:bg-slate-800/50 dark:text-slate-400`}
+            />
+          </label>
+
+          {/* Customer Type */}
+          <label className="block">
+            <span className="mb-2 block text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">
+              Customer Type
+            </span>
+            <input
+              value={selectedCustomer ? CUSTOMER_TYPE_LABELS[selectedCustomer.customerType || "market"] : ""}
               readOnly
               placeholder="Select customer first"
               className={`${inputClass} bg-slate-100/70 text-slate-500 cursor-not-allowed dark:bg-slate-800/50 dark:text-slate-400`}

@@ -40,6 +40,7 @@ function toCustomer(values: CustomerFormValues, id: string): Customer {
   const openingBalance = Number(values.openingBalance) || 0;
   return {
     id,
+    customerType: values.customerType || "market",
     name: values.name,
     businessName: values.businessName,
     phone: values.phone,
@@ -134,6 +135,7 @@ async function fetchUpdate(id: string, values: CustomerFormValues): Promise<Cust
     method: "PUT",
     body: {
       ...existing,
+      customerType: values.customerType || "market",
       name: values.name,
       businessName: values.businessName,
       phone: values.phone,
@@ -185,6 +187,7 @@ function update(id: string, values: CustomerFormValues): Customer {
   const previous = cache![idx];
   const updated: Customer = {
     ...previous,
+    customerType: values.customerType || "market",
     name: values.name,
     businessName: values.businessName,
     phone: values.phone,

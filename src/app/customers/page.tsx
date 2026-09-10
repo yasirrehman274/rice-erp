@@ -45,12 +45,18 @@ export default function CustomersPage() {
         </div>
         <CustomerPageActions customers={customers} />
       </div>
-      <div className="grid gap-4 sm:grid-cols-3">
+      <div className="grid gap-4 sm:grid-cols-4">
         <Stat label="Total customers" value={String(customers.length)} />
         <Stat
-          label="Active customers"
+          label="Market customers"
           value={String(
-            customers.filter((item) => item.status === "active").length,
+            customers.filter((item) => (item.customerType || "market") === "market").length,
+          )}
+        />
+        <Stat
+          label="Outsider customers"
+          value={String(
+            customers.filter((item) => item.customerType === "outsider").length,
           )}
         />
         <Stat
