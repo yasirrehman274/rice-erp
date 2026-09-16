@@ -1,6 +1,7 @@
-import { Building2, Package, User } from "lucide-react";
+import { Building2, Handshake, Package, User } from "lucide-react";
 import Link from "next/link";
 import { formatCurrency } from "@/lib/utils";
+import { profitIsRecorded } from "@/lib/reporting";
 import type { Sale } from "@/types/sale";
 import { SalePaymentBadge } from "./SaleStatusBadge";
 
@@ -15,12 +16,19 @@ export default function SaleCard({ sale }: { sale: Sale }) {
     <div className="mt-5 space-y-2.5 text-sm text-slate-500">
       <p className="flex items-center gap-2"><Package size={15} />{sale.productName}</p>
       <p className="flex items-center gap-2"><Building2 size={15} />{sale.warehouseName}</p>
+      <p className="flex items-center gap-2"><Handshake size={15} />{sale.brokerName || <span className="text-slate-300 dark:text-slate-600">Not assigned</span>}</p>
       <p className="flex items-center gap-2"><User size={15} />Qty: <span className="font-semibold text-slate-800 dark:text-slate-100">{sale.quantity} bags</span></p>
     </div>
     <div className="mt-4 flex items-center justify-between border-t border-slate-100 pt-4 dark:border-slate-800">
       <div>
         <p className="text-xs text-slate-500">Total</p>
         <p className="font-bold">{formatCurrency(sale.grandTotal)}</p>
+      </div>
+      <div className="text-right">
+        <p className="text-xs text-slate-500">Profit</p>
+        <p className={`font-bold ${profitIsRecorded(sale) ? (sale.grossProfit! < 0 ? "text-rose-600" : "text-emerald-600") : "text-slate-400"}`}>
+          {profitIsRecorded(sale) ? formatCurrency(sale.grossProfit ?? 0) : "—"}
+        </p>
       </div>
       <SalePaymentBadge status={sale.paymentStatus} />
     </div>

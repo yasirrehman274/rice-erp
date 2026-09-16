@@ -1,4 +1,4 @@
-import { Building2, Package, Truck } from "lucide-react";
+import { Building2, Handshake, Package, Truck } from "lucide-react";
 import Link from "next/link";
 import { formatCurrency } from "@/lib/utils";
 import type { Purchase } from "@/types/purchase";
@@ -16,6 +16,7 @@ export default function PurchaseCard({ purchase }: { purchase: Purchase }) {
     <div className="mt-5 space-y-2.5 text-sm text-slate-500">
       <p className="flex items-center gap-2"><Package size={15} />{purchaseService.purchaseProductSummary(purchase)}</p>
       <p className="flex items-center gap-2"><Building2 size={15} />{purchase.warehouseName}</p>
+      <p className="flex items-center gap-2"><Handshake size={15} />{purchase.brokerName || <span className="text-slate-300 dark:text-slate-600">Not assigned</span>}</p>
       <p className="flex items-center gap-2"><Truck size={15} />Qty: <span className="font-semibold text-slate-800 dark:text-slate-100">{purchaseService.purchaseTotalBags(purchase)} bags</span></p>
     </div>
     <div className="mt-4 flex items-center justify-between border-t border-slate-100 pt-4 dark:border-slate-800">

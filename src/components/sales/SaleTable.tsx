@@ -12,6 +12,7 @@ import {
 import Link from "next/link";
 import { useMemo, useState } from "react";
 import { formatCurrency, formatDate } from "@/lib/utils";
+import { profitIsRecorded } from "@/lib/reporting";
 import type { Sale, SaleStatus, SalePaymentStatus } from "@/types/sale";
 import DeleteSaleDialog from "./DeleteSaleDialog";
 import { saleService } from "@/services/sale.service";
@@ -22,10 +23,12 @@ const pageSize = 8;
 type SortKey =
   | "saleNumber"
   | "customerName"
+  | "brokerName"
   | "productName"
   | "quantity"
   | "grandTotal"
   | "remainingBalance"
+  | "grossProfit"
   | "saleDate";
 
 export function SaleTableSkeleton() {
@@ -50,6 +53,7 @@ export default function SaleTable({ initialSales }: { initialSales: Sale[] }) {
   }
   const [query, setQuery] = useState("");
   const [status, setStatus] = useState<"all" | SaleStatus>("all");
+  const [broker, setBroker] = useState("all");
   const [paymentStatus, setPaymentStatus] = useState<"all" | SalePaymentStatus>(
     "all",
   );
@@ -64,8 +68,10 @@ export default function SaleTable({ initialSales }: { initialSales: Sale[] }) {
         .filter(
           (sale) =>
             (status === "all" || sale.status === status) &&
+            (broker === "all" ||
+              (broker === "__none__" ? !sale.brokerName : sale.brokerName === broker)) &&
             (paymentStatus === "all" || sale.paymentStatus === paymentStatus) &&
-            `${sale.saleNumber} ${sale.customerName} ${sale.productName} ${sale.warehouseName}`
+            `${sale.saleNumber} ${sale.customerName} ${sale.brokerName} ${sale.productName} ${sale.displayProductName ?? ""} ${sale.warehouseName} ${(sale.items ?? []).map((item) => `${item.productName} ${item.displayProductName ?? ""}`).join(" ")}`
               .toLowerCase()
               .includes(query.toLowerCase()),
         )
@@ -78,7 +84,15 @@ export default function SaleTable({ initialSales }: { initialSales: Sale[] }) {
               : String(left).localeCompare(String(right));
           return ascending ? comparison : -comparison;
         }),
-    [sales, query, status, paymentStatus, sort, ascending],
+    [sales, query, status, broker, paymentStatus, sort, ascending],
+  );
+
+  const brokerOptions = useMemo(
+    () =>
+      Array.from(
+        new Set(sales.map((sale) => sale.brokerName || "__none__")),
+      ).sort((a, b) => a.localeCompare(b)),
+    [sales],
   );
 
   const pageCount = Math.max(1, Math.ceil(filtered.length / pageSize));
@@ -98,6 +112,7 @@ export default function SaleTable({ initialSales }: { initialSales: Sale[] }) {
   function resetFilters() {
     setQuery("");
     setStatus("all");
+    setBroker("all");
     setPaymentStatus("all");
     setPage(1);
   }
@@ -135,6 +150,21 @@ export default function SaleTable({ initialSales }: { initialSales: Sale[] }) {
             />
           </div>
           <div className="flex gap-2">
+            <select
+              value={broker}
+              onChange={(event) => {
+                setBroker(event.target.value);
+                setPage(1);
+              }}
+              className="h-10 rounded-xl border border-slate-200 bg-white px-3 text-sm outline-none focus:border-emerald-500 dark:border-slate-700 dark:bg-slate-800"
+            >
+              <option value="all">All brokers</option>
+              {brokerOptions.map((name) => (
+                <option key={name} value={name}>
+                  {name === "__none__" ? "Not assigned" : name}
+                </option>
+              ))}
+            </select>
             {/* <select value={status} onChange={(event) => { setStatus(event.target.value as "all" | SaleStatus); setPage(1); }} className="h-10 rounded-xl border border-slate-200 bg-white px-3 text-sm outline-none focus:border-emerald-500 dark:border-slate-700 dark:bg-slate-800">
             <option value="all">All statuses</option>
             <option value="pending">Pending</option>
@@ -179,7 +209,7 @@ export default function SaleTable({ initialSales }: { initialSales: Sale[] }) {
         ) : (
           <>
             <div className="hidden overflow-x-auto lg:block">
-              <table className="w-full min-w-[1200px] text-left text-sm">
+              <table className="w-full min-w-[1300px] text-left text-sm">
                 <thead className="bg-slate-50 text-xs uppercase tracking-wide text-slate-500 dark:bg-slate-800/40">
                   <tr>
                     <th
@@ -193,6 +223,12 @@ export default function SaleTable({ initialSales }: { initialSales: Sale[] }) {
                       onClick={() => changeSort("customerName")}
                     >
                       Customer{sortIcon("customerName")}
+                    </th>
+                    <th
+                      className="cursor-pointer px-4 py-3 select-none"
+                      onClick={() => changeSort("brokerName")}
+                    >
+                      Broker{sortIcon("brokerName")}
                     </th>
                     <th
                       className="cursor-pointer px-4 py-3 select-none"
@@ -219,6 +255,9 @@ export default function SaleTable({ initialSales }: { initialSales: Sale[] }) {
                     >
                       Remaining{sortIcon("remainingBalance")}
                     </th>
+                    <th className="cursor-pointer px-4 py-3 text-right select-none" onClick={() => changeSort("grossProfit")}>
+                      Profit{sortIcon("grossProfit")}
+                    </th>
                     <th className="px-4 py-3">Payment</th>
                     <th
                       className="cursor-pointer px-4 py-3 select-none"
@@ -242,6 +281,13 @@ export default function SaleTable({ initialSales }: { initialSales: Sale[] }) {
                         {sale.customerName}
                       </td>
                       <td className="px-4 py-4 text-slate-500">
+                        {sale.brokerName || (
+                          <span className="text-slate-300 dark:text-slate-600">
+                            Not assigned
+                          </span>
+                        )}
+                      </td>
+                      <td className="px-4 py-4 text-slate-500">
                         {sale.productName}
                       </td>
                       <td className="px-4 py-4 text-right">
@@ -255,6 +301,9 @@ export default function SaleTable({ initialSales }: { initialSales: Sale[] }) {
                       </td>
                       <td className="px-4 py-4 text-right text-rose-600">
                         {formatCurrency(sale.remainingBalance)}
+                      </td>
+                      <td className={`px-4 py-4 text-right font-medium ${profitIsRecorded(sale) ? (sale.grossProfit! < 0 ? "text-rose-600" : "text-emerald-600") : "text-slate-400"}`}>
+                        {profitIsRecorded(sale) ? formatCurrency(sale.grossProfit ?? 0) : "—"}
                       </td>
                       <td className="px-4 py-4">
                         <SalePaymentBadge status={sale.paymentStatus} />

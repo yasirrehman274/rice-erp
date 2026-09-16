@@ -1,12 +1,13 @@
 "use client";
 
-import { Boxes, CircleDollarSign, Receipt, ShoppingCart, WalletCards } from "lucide-react";
+import { Boxes, CircleDollarSign, Receipt, ShoppingCart, WalletCards, TrendingUp } from "lucide-react";
 import StatCard from "./StatCard";
 import { inventoryService } from "@/services/inventory.service";
 import { purchaseService } from "@/services/purchase.service";
 import { saleService } from "@/services/sale.service";
 import { supplierService } from "@/services/supplier.service";
 import { expenseService } from "@/services/expense.service";
+import { profitIsRecorded } from "@/lib/reporting";
 import { useState, useEffect } from "react";
 import type { LucideIcon } from "lucide-react";
 
@@ -14,15 +15,19 @@ type Card = { title: string; value: string; detail: string; change: string; posi
 
 function getCards(): Card[] {
   const totalStock = inventoryService.getTotalStock();
-  const totalSales = saleService.getAll().reduce((sum, s) => sum + s.grandTotal, 0);
+  const sales = saleService.getAll();
+  const totalSales = sales.reduce((sum, s) => sum + s.grandTotal, 0);
+  const totalProfit = sales.reduce((sum, s) => sum + (profitIsRecorded(s) ? (s.grossProfit ?? 0) : 0), 0);
   const totalPurchases = purchaseService.getAll().reduce((sum, p) => sum + p.grandTotal, 0);
   const outstanding = supplierService.getAll().reduce((sum, s) => sum + s.currentBalance, 0);
   const totalExpenses = expenseService.total(expenseService.getAll());
+  const fmtLakh = (n: number) => (n >= 1_000_000 ? `${(n / 1_000_000).toFixed(1)}M` : new Intl.NumberFormat("en-PK").format(n));
   return [
     { title: "Total stock", value: `${totalStock.toLocaleString()} bags`, detail: "across all warehouses", change: "", positive: true, icon: Boxes, tone: "bg-emerald-100 text-emerald-600 dark:bg-emerald-500/15" },
-    { title: "Total sales", value: `Rs. ${totalSales >= 1_000_000 ? `${(totalSales / 1_000_000).toFixed(1)}M` : new Intl.NumberFormat("en-PK").format(totalSales)}`, detail: "lifetime", change: "", positive: true, icon: CircleDollarSign, tone: "bg-blue-100 text-blue-600 dark:bg-blue-500/15" },
-    { title: "Total purchases", value: `Rs. ${totalPurchases >= 1_000_000 ? `${(totalPurchases / 1_000_000).toFixed(1)}M` : new Intl.NumberFormat("en-PK").format(totalPurchases)}`, detail: "lifetime", change: "", positive: true, icon: ShoppingCart, tone: "bg-amber-100 text-amber-600 dark:bg-amber-500/15" },
-    { title: "Total expenses", value: `Rs. ${totalExpenses >= 1_000_000 ? `${(totalExpenses / 1_000_000).toFixed(1)}M` : new Intl.NumberFormat("en-PK").format(totalExpenses)}`, detail: "non-cancelled", change: "", positive: true, icon: Receipt, tone: "bg-rose-100 text-rose-600 dark:bg-rose-500/15" },
+    { title: "Total sales", value: `Rs. ${fmtLakh(totalSales)}`, detail: "lifetime", change: "", positive: true, icon: CircleDollarSign, tone: "bg-blue-100 text-blue-600 dark:bg-blue-500/15" },
+    { title: "Gross profit", value: `Rs. ${fmtLakh(totalProfit)}`, detail: "across sold inventory", change: "", positive: totalProfit >= 0, icon: TrendingUp, tone: "bg-teal-100 text-teal-600 dark:bg-teal-500/15" },
+    { title: "Total purchases", value: `Rs. ${fmtLakh(totalPurchases)}`, detail: "lifetime", change: "", positive: true, icon: ShoppingCart, tone: "bg-amber-100 text-amber-600 dark:bg-amber-500/15" },
+    { title: "Total expenses", value: `Rs. ${fmtLakh(totalExpenses)}`, detail: "non-cancelled", change: "", positive: true, icon: Receipt, tone: "bg-rose-100 text-rose-600 dark:bg-rose-500/15" },
     { title: "Outstanding", value: `Rs. ${new Intl.NumberFormat("en-PK").format(outstanding)}`, detail: "to suppliers", change: "", positive: outstanding === 0, icon: WalletCards, tone: "bg-violet-100 text-violet-600 dark:bg-violet-500/15" },
   ];
 }
@@ -30,6 +35,7 @@ function getCards(): Card[] {
 const EMPTY_CARDS: Card[] = [
   { title: "Total stock", value: "—", detail: "across all warehouses", change: "", positive: true, icon: Boxes, tone: "bg-emerald-100 text-emerald-600 dark:bg-emerald-500/15" },
   { title: "Total sales", value: "—", detail: "lifetime", change: "", positive: true, icon: CircleDollarSign, tone: "bg-blue-100 text-blue-600 dark:bg-blue-500/15" },
+  { title: "Gross profit", value: "—", detail: "across sold inventory", change: "", positive: true, icon: TrendingUp, tone: "bg-teal-100 text-teal-600 dark:bg-teal-500/15" },
   { title: "Total purchases", value: "—", detail: "lifetime", change: "", positive: true, icon: ShoppingCart, tone: "bg-amber-100 text-amber-600 dark:bg-amber-500/15" },
   { title: "Total expenses", value: "—", detail: "non-cancelled", change: "", positive: true, icon: Receipt, tone: "bg-rose-100 text-rose-600 dark:bg-rose-500/15" },
   { title: "Outstanding", value: "—", detail: "to suppliers", change: "", positive: true, icon: WalletCards, tone: "bg-violet-100 text-violet-600 dark:bg-violet-500/15" },
@@ -44,5 +50,5 @@ export default function DashboardCards() {
       .catch(() => { if (mounted) setCards(getCards()); });
     return () => { mounted = false; };
   }, []);
-  return <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">{cards.map((card) => <StatCard key={card.title} {...card} />)}</section>;
+  return <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">{cards.map((card) => <StatCard key={card.title} {...card} />)}</section>;
 }

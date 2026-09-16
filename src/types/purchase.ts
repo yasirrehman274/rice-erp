@@ -22,6 +22,8 @@ export interface Purchase {
   purchaseDate: string;
   supplierId: string;
   supplierName: string;
+  brokerId?: string;
+  brokerName?: string;
   warehouseId: string;
   warehouseName: string;
   productId: string;
@@ -68,6 +70,7 @@ export interface PurchaseFormValues {
   purchaseNumber: string;
   purchaseDate: string;
   supplierId: string;
+  brokerId: string;
   warehouseId: string;
   items: PurchaseItemForm[];
   discount: string;
@@ -98,6 +101,7 @@ export interface PurchaseHistoryEntry {
   purchaseNumber: string;
   date: string;
   supplierName: string;
+  brokerName?: string;
   productName: string;
   quantity: number;
   amount: number;

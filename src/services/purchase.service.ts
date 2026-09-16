@@ -3,6 +3,7 @@ import { getItem, setItem, ensureSeeded } from "@/lib/storage";
 import { seedAll } from "@/utils/seed";
 import { apiRequest } from "@/lib/api";
 import { supplierService } from "./supplier.service";
+import { brokerService } from "./broker.service";
 import { warehouseService } from "./warehouse.service";
 import { productService } from "./product.service";
 import { inventoryService } from "./inventory.service";
@@ -38,10 +39,11 @@ function nextId(existing: Purchase[]): string {
   return `pur-${String(n).padStart(3, "0")}`;
 }
 
-function resolveNames(values: PurchaseFormValues): { supplierName: string; warehouseName: string } {
+function resolveNames(values: PurchaseFormValues): { supplierName: string; warehouseName: string; brokerName: string } {
   const supplier = supplierService.getById(values.supplierId);
   const warehouse = warehouseService.getById(values.warehouseId);
-  return { supplierName: supplier?.name ?? "", warehouseName: warehouse?.name ?? "" };
+  const broker = brokerService.getById(values.brokerId);
+  return { supplierName: supplier?.name ?? "", warehouseName: warehouse?.name ?? "", brokerName: broker?.name ?? "" };
 }
 
 function toPurchaseItems(values: PurchaseFormValues): PurchaseItem[] {
@@ -81,6 +83,8 @@ function toPurchase(values: PurchaseFormValues, id: string): Purchase {
     purchaseDate: values.purchaseDate,
     supplierId: values.supplierId,
     supplierName: names.supplierName,
+    brokerId: values.brokerId,
+    brokerName: names.brokerName,
     warehouseId: values.warehouseId,
     warehouseName: names.warehouseName,
     productId: first.productId,
@@ -276,7 +280,7 @@ function remove(id: string): void {
 
 function search(query: string): Purchase[] {
   const q = query.toLowerCase();
-  return getAll().filter((p) => `${p.purchaseNumber} ${p.supplierName} ${p.productName}`.toLowerCase().includes(q));
+  return getAll().filter((p) => `${p.purchaseNumber} ${p.supplierName} ${p.brokerName ?? ""} ${p.productName}`.toLowerCase().includes(q));
 }
 
 function filter(predicate: (p: Purchase) => boolean): Purchase[] {
@@ -328,6 +332,7 @@ function getPurchaseHistory(): PurchaseHistoryEntry[] {
     purchaseNumber: purchase.purchaseNumber,
     date: purchase.purchaseDate,
     supplierName: purchase.supplierName,
+    brokerName: purchase.brokerName,
     productName: purchaseProductSummary(purchase),
     quantity: purchaseTotalBags(purchase),
     amount: purchase.grandTotal,

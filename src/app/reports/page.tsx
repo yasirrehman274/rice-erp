@@ -1,17 +1,19 @@
 "use client";
 
-import { ArrowUpRight, Boxes, FileText, Download, Package, Receipt, ShoppingCart, TrendingUp, Factory, Truck, Users } from "lucide-react";
+import { ArrowUpRight, Boxes, FileText, Download, Package, Receipt, ShoppingCart, TrendingUp, Factory, Truck, Users, Handshake } from "lucide-react";
 import Link from "next/link";
 import { purchaseService } from "@/services/purchase.service";
 import { saleService } from "@/services/sale.service";
 import { inventoryService } from "@/services/inventory.service";
 import { supplierService } from "@/services/supplier.service";
 import { customerService } from "@/services/customer.service";
+import { brokerService } from "@/services/broker.service";
 import { warehouseService } from "@/services/warehouse.service";
 import { expenseService } from "@/services/expense.service";
 import { productionService } from "@/services/production.service";
 import { reportService } from "@/services/report.service";
 import DateRangeFilter, { initialDateRange, dateRangeFor, type DateRangeFilterState } from "@/components/reports/DateRangeFilter";
+import BrokerReportSection from "@/components/reports/BrokerReportSection";
 import { inRange, type DateRange } from "@/lib/reporting";
 import { formatCurrency } from "@/lib/utils";
 import { useState, useEffect } from "react";
@@ -19,6 +21,7 @@ import type { Purchase } from "@/types/purchase";
 import type { Sale } from "@/types/sale";
 import type { Supplier } from "@/types/supplier";
 import type { Customer } from "@/types/customer";
+import type { Broker } from "@/types/broker";
 import type { Expense } from "@/types/expense";
 import type { Production } from "@/types/production";
 
@@ -30,6 +33,7 @@ export default function ReportsPage() {
   const [activeWarehouses, setActiveWarehouses] = useState<{ id: string; name: string; code: string; occupiedCapacity: number; capacity: number; productCount: number; totalStock: number }[]>([]);
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
   const [customers, setCustomers] = useState<Customer[]>([]);
+  const [brokers, setBrokers] = useState<Broker[]>([]);
   const [filter, setFilter] = useState<DateRangeFilterState>(() => initialDateRange());
 
   useEffect(() => {
@@ -43,6 +47,7 @@ export default function ReportsPage() {
       inventoryService.refresh(),
       supplierService.refresh(),
       customerService.refresh(),
+      brokerService.refresh(),
     ])
       .then(() => {
         if (mounted) {
@@ -53,6 +58,7 @@ export default function ReportsPage() {
           setActiveWarehouses(warehouseService.filter((w) => w.status === "active"));
           setSuppliers(supplierService.getAll());
           setCustomers(customerService.getAll());
+          setBrokers(brokerService.getAll());
         }
       })
       .catch(() => {
@@ -64,6 +70,7 @@ export default function ReportsPage() {
           setActiveWarehouses(warehouseService.filter((w) => w.status === "active"));
           setSuppliers(supplierService.getAll());
           setCustomers(customerService.getAll());
+          setBrokers(brokerService.getAll());
         }
       });
     return () => {
@@ -173,6 +180,16 @@ export default function ReportsPage() {
       icon: Users,
       href: "/customers",
       foot: "Balance due",
+    },
+    {
+      title: "Broker activity",
+      description: "Purchases and sales attributed to brokers.",
+      value: `${brokers.filter((b) => b.status === "active").length} active`,
+      change: `${brokers.length} total`,
+      positive: true,
+      icon: Handshake,
+      href: "/brokers",
+      foot: "Filterable by broker and transaction type",
     },
   ];
 
@@ -315,6 +332,8 @@ export default function ReportsPage() {
         </table>
       </div>
     </section>
+
+    <BrokerReportSection brokers={brokers} range={range} />
 
     <div className="grid gap-6 lg:grid-cols-2">
       <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900 sm:p-6">

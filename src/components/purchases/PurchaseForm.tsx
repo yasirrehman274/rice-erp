@@ -14,10 +14,12 @@ import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import LoadingSpinner from "@/components/ui/LoadingSpinner";
 import type { Supplier } from "@/types/supplier";
+import type { Broker } from "@/types/broker";
 import type { Product } from "@/types/product";
 import type { Warehouse } from "@/types/warehouse";
 import type { Purchase, PurchaseFormValues, PurchaseItemForm } from "@/types/purchase";
 import { supplierService } from "@/services/supplier.service";
+import { brokerService } from "@/services/broker.service";
 import { warehouseService } from "@/services/warehouse.service";
 import { productService } from "@/services/product.service";
 import { purchaseService } from "@/services/purchase.service";
@@ -49,6 +51,7 @@ const emptyValues: PurchaseFormValues = {
   purchaseNumber: "",
   purchaseDate: "",
   supplierId: "",
+  brokerId: "",
   warehouseId: "",
   items: [newItem()],
   discount: "",
@@ -106,6 +109,7 @@ function toFormValues(purchase?: Purchase): PurchaseFormValues {
     purchaseNumber: purchase.purchaseNumber,
     purchaseDate: purchase.purchaseDate,
     supplierId: purchase.supplierId,
+    brokerId: purchase.brokerId ?? "",
     warehouseId: purchase.warehouseId,
     items,
     discount: String(purchase.discount),
@@ -126,6 +130,7 @@ export default function PurchaseForm({ purchase }: { purchase?: Purchase }) {
   const router = useRouter();
   const [values, setValues] = useState<PurchaseFormValues>(() => toFormValues(purchase));
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
+  const [brokers, setBrokers] = useState<Broker[]>([]);
   const [warehouses, setWarehouses] = useState<Warehouse[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -133,16 +138,18 @@ export default function PurchaseForm({ purchase }: { purchase?: Purchase }) {
 
   useEffect(() => {
     let mounted = true;
-    Promise.all([supplierService.refresh(), warehouseService.refresh(), productService.refresh()])
+    Promise.all([supplierService.refresh(), brokerService.refresh(), warehouseService.refresh(), productService.refresh()])
       .then(() => {
         if (!mounted) return;
         setSuppliers(supplierService.getAll());
+        setBrokers(brokerService.getAll());
         setWarehouses(warehouseService.getAll());
         setProducts(productService.getAll());
       })
       .catch(() => {
         if (!mounted) return;
         setSuppliers(supplierService.getAll());
+        setBrokers(brokerService.getAll());
         setWarehouses(warehouseService.getAll());
         setProducts(productService.getAll());
       });
@@ -150,6 +157,14 @@ export default function PurchaseForm({ purchase }: { purchase?: Purchase }) {
   }, []);
 
   const selectedSupplier = suppliers.find((supplier) => supplier.id === values.supplierId);
+  const selectedWarehouse = warehouses.find((warehouse) => warehouse.id === values.warehouseId);
+  const capacityStatus = (() => {
+    if (!selectedWarehouse) return null;
+    const capacity = Number(selectedWarehouse.capacity) || 0;
+    const current = Number(selectedWarehouse.totalStock ?? selectedWarehouse.occupiedCapacity) || 0;
+    if (capacity < 1) return null;
+    return { capacity, current, pct: Math.round((current / capacity) * 100) };
+  })();
 
   const totals = useMemo(() => {
     const subtotal = values.items.reduce((sum, item) => {
@@ -236,6 +251,20 @@ export default function PurchaseForm({ purchase }: { purchase?: Purchase }) {
     if (!values.purchaseDate) nextErrors.purchaseDate = "Purchase date is required.";
     if (!values.supplierId) nextErrors.supplierId = "Supplier is required.";
     if (!values.warehouseId) nextErrors.warehouseId = "Receiving Warehouse is required.";
+    const incomingBags = values.items.reduce((sum, item) => sum + (Number(item.quantity) || 0), 0);
+    if (values.warehouseId && incomingBags > 0) {
+      const warehouse = warehouses.find((w) => w.id === values.warehouseId);
+      const capacity = Number(warehouse?.capacity) || 0;
+      const currentStock = Number(warehouse?.totalStock ?? warehouse?.occupiedCapacity) || 0;
+      const excludeBags =
+        purchase && purchase.warehouseId === values.warehouseId
+          ? purchaseService.purchaseTotalBags(purchase)
+          : 0;
+      const effectiveStock = Math.max(0, currentStock - excludeBags);
+      if (capacity > 0 && effectiveStock + incomingBags > capacity) {
+        nextErrors.warehouseId = `Warehouse capacity exceeded at "${warehouse?.name ?? ""}". Capacity: ${capacity} bags, Current stock: ${currentStock} bags, Requested incoming: ${incomingBags} bags, Available space: ${Math.max(0, capacity - effectiveStock)} bags.`;
+      }
+    }
     if (values.items.length === 0) nextErrors.items = "Add at least one item.";
     const invalidIndex = values.items.findIndex((item) => {
       if (!item.productId) return true;
@@ -346,6 +375,27 @@ export default function PurchaseForm({ purchase }: { purchase?: Purchase }) {
             />
           </label>
 
+          {/* Broker */}
+          <label className="block">
+            <span className="mb-2 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">
+              Broker
+            </span>
+            <select
+              value={values.brokerId}
+              onChange={(event) => update("brokerId", event.target.value)}
+              className={inputClass}
+            >
+              <option value="">Not assigned</option>
+              {brokers
+                .filter((broker) => broker.status === "active" || broker.id === values.brokerId)
+                .map((broker) => (
+                  <option key={broker.id} value={broker.id}>
+                    {broker.name}
+                  </option>
+                ))}
+            </select>
+          </label>
+
           {/* Receiving Warehouse */}
           <label className="block">
             <span className="mb-2 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">
@@ -365,6 +415,21 @@ export default function PurchaseForm({ purchase }: { purchase?: Purchase }) {
                   </option>
                 ))}
             </select>
+            {capacityStatus && (
+              <span
+                className={`mt-1.5 block text-xs font-medium ${
+                  capacityStatus.pct >= 100
+                    ? "text-rose-500"
+                    : capacityStatus.pct >= 90
+                      ? "text-amber-500"
+                      : "text-slate-500 dark:text-slate-400"
+                }`}
+              >
+                Capacity: {capacityStatus.capacity} bags · Current stock: {capacityStatus.current} bags ·{" "}
+                {capacityStatus.pct}% full
+                {capacityStatus.pct >= 100 && " · At full capacity — further increases are blocked"}
+              </span>
+            )}
             {errors.warehouseId && (
               <span className="mt-1.5 block text-xs font-medium text-rose-500">
                 {errors.warehouseId}

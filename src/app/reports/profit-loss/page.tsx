@@ -9,7 +9,7 @@ import { inventoryService } from "@/services/inventory.service";
 import { reportService } from "@/services/report.service";
 import DateRangeFilter, { initialDateRange, dateRangeFor, type DateRangeFilterState } from "@/components/reports/DateRangeFilter";
 import { inRange, isActiveSale, type DateRange } from "@/lib/reporting";
-import { formatCurrency } from "@/lib/utils";
+import { formatCurrency, round2 } from "@/lib/utils";
 import { useState, useEffect } from "react";
 import type { Purchase } from "@/types/purchase";
 import type { Sale } from "@/types/sale";
@@ -52,8 +52,8 @@ export default function ProfitLossPage() {
   const cogs = (
     <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900 sm:p-6">
       <div className="flex items-center gap-2">
-        <h2 className="font-semibold">Cost of goods sold (Average Cost)</h2>
-        <span title="Cost per bag = product average cost per kg (maintained by purchases) × bag weight." className="inline-flex"><Info size={15} className="text-slate-400" /></span>
+        <h2 className="font-semibold">Cost of goods sold</h2>
+        <span title="Cost per bag for recent sales uses the actual inventory cost recorded on each sale (weighted average cost per kg × bag weight); older sales without recorded cost use the current blended average cost." className="inline-flex"><Info size={15} className="text-slate-400" /></span>
       </div>
       {cogsItems.length === 0 ? (
         <p className="mt-4 text-sm text-slate-500">No goods sold in this period — cost of goods sold is Rs. 0.</p>
@@ -112,6 +112,7 @@ export default function ProfitLossPage() {
       <div className="mt-3"><Row label="Net sales" value={pl.netSales} /></div>
       <div className="mt-1.5"><Row label="Cost of goods sold" value={pl.cogs.total} negative /></div>
       <div className="border-t border-slate-200 pt-3 dark:border-slate-700"><Row label="Gross profit" value={pl.grossProfit} bold /></div>
+      {pl.netSales > 0 && <div className="mt-1.5 flex items-center justify-between"><span className="text-sm text-slate-500">Profit margin</span><span className="text-sm font-medium">{round2((pl.grossProfit / pl.netSales) * 100)}%</span></div>}
       {periodSales.length > 0 && <p className="mt-3 text-xs text-slate-400">{periodSales.length} sale(s) · {periodPurchases.length} purchase(s) in this period.</p>}
     </section>
 

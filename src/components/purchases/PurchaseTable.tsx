@@ -26,6 +26,7 @@ const pageSize = 8;
 type SortKey =
   | "purchaseNumber"
   | "supplierName"
+  | "brokerName"
   | "productName"
   | "quantity"
   | "grandTotal"
@@ -58,6 +59,7 @@ export default function PurchaseTable({
   }
   const [query, setQuery] = useState("");
   const [status, setStatus] = useState<"all" | PurchaseStatus>("all");
+  const [broker, setBroker] = useState("all");
   const [paymentStatus, setPaymentStatus] = useState<
     "all" | PurchasePaymentStatus
   >("all");
@@ -72,9 +74,11 @@ export default function PurchaseTable({
         .filter(
           (purchase) =>
             (status === "all" || purchase.status === status) &&
+            (broker === "all" ||
+              (broker === "__none__" ? !purchase.brokerName : purchase.brokerName === broker)) &&
             (paymentStatus === "all" ||
               purchase.paymentStatus === paymentStatus) &&
-            `${purchase.purchaseNumber} ${purchase.supplierName} ${purchase.warehouseName} ${purchaseService.purchaseProductSummary(purchase)} ${(purchase.items ?? []).map((item) => item.productName).join(" ")}`
+            `${purchase.purchaseNumber} ${purchase.supplierName} ${purchase.brokerName} ${purchase.warehouseName} ${purchaseService.purchaseProductSummary(purchase)} ${(purchase.items ?? []).map((item) => item.productName).join(" ")}`
               .toLowerCase()
               .includes(query.toLowerCase()),
         )
@@ -87,7 +91,17 @@ export default function PurchaseTable({
               : String(left).localeCompare(String(right));
           return ascending ? comparison : -comparison;
         }),
-    [purchases, query, status, paymentStatus, sort, ascending],
+    [purchases, query, status, broker, paymentStatus, sort, ascending],
+  );
+
+  const brokerOptions = useMemo(
+    () =>
+      Array.from(
+        new Set(
+          purchases.map((purchase) => purchase.brokerName || "__none__"),
+        ),
+      ).sort((a, b) => a.localeCompare(b)),
+    [purchases],
   );
 
   const pageCount = Math.max(1, Math.ceil(filtered.length / pageSize));
@@ -107,6 +121,7 @@ export default function PurchaseTable({
   function resetFilters() {
     setQuery("");
     setStatus("all");
+    setBroker("all");
     setPaymentStatus("all");
     setPage(1);
   }
@@ -144,6 +159,21 @@ export default function PurchaseTable({
             />
           </div>
           <div className="flex gap-2">
+            <select
+              value={broker}
+              onChange={(event) => {
+                setBroker(event.target.value);
+                setPage(1);
+              }}
+              className="h-10 rounded-xl border border-slate-200 bg-white px-3 text-sm outline-none focus:border-emerald-500 dark:border-slate-700 dark:bg-slate-800"
+            >
+              <option value="all">All brokers</option>
+              {brokerOptions.map((name) => (
+                <option key={name} value={name}>
+                  {name === "__none__" ? "Not assigned" : name}
+                </option>
+              ))}
+            </select>
             {/* <select value={status} onChange={(event) => { setStatus(event.target.value as "all" | PurchaseStatus); setPage(1); }} className="h-10 rounded-xl border border-slate-200 bg-white px-3 text-sm outline-none focus:border-emerald-500 dark:border-slate-700 dark:bg-slate-800">
             <option value="all">All statuses</option>
             <option value="pending">Pending</option>
@@ -187,7 +217,7 @@ export default function PurchaseTable({
         ) : (
           <>
             <div className="hidden overflow-x-auto lg:block">
-              <table className="w-full min-w-[1200px] text-left text-sm">
+              <table className="w-full min-w-[1300px] text-left text-sm">
                 <thead className="bg-slate-50 text-xs uppercase tracking-wide text-slate-500 dark:bg-slate-800/40">
                   <tr>
                     <th
@@ -201,6 +231,12 @@ export default function PurchaseTable({
                       onClick={() => changeSort("supplierName")}
                     >
                       Supplier{sortIcon("supplierName")}
+                    </th>
+                    <th
+                      className="cursor-pointer px-4 py-3 select-none"
+                      onClick={() => changeSort("brokerName")}
+                    >
+                      Broker{sortIcon("brokerName")}
                     </th>
                     <th
                       className="cursor-pointer px-4 py-3 select-none"
@@ -248,6 +284,13 @@ export default function PurchaseTable({
                       </td>
                       <td className="px-4 py-4 text-slate-500">
                         {purchase.supplierName}
+                      </td>
+                      <td className="px-4 py-4 text-slate-500">
+                        {purchase.brokerName || (
+                          <span className="text-slate-300 dark:text-slate-600">
+                            Not assigned
+                          </span>
+                        )}
                       </td>
                       <td className="px-4 py-4 text-slate-500">
                         {purchaseService.purchaseProductSummary(purchase)}

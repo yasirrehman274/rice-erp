@@ -15,11 +15,13 @@ import { useRouter } from "next/navigation";
 import LoadingSpinner from "@/components/ui/LoadingSpinner";
 import type { Customer } from "@/types/customer";
 import { CUSTOMER_TYPE_LABELS } from "@/types/customer";
+import type { Broker } from "@/types/broker";
 import type { Product } from "@/types/product";
 import type { Warehouse } from "@/types/warehouse";
 import type { InventoryItem } from "@/types/inventory";
 import type { Sale, SaleFormValues, SaleItemForm } from "@/types/sale";
 import { customerService } from "@/services/customer.service";
+import { brokerService } from "@/services/broker.service";
 import { inventoryService } from "@/services/inventory.service";
 import { productService } from "@/services/product.service";
 import { saleService } from "@/services/sale.service";
@@ -32,6 +34,7 @@ function newItem(): SaleItemForm {
   return {
     id: `itm-${Date.now()}-${itemSeq}`,
     productId: "",
+    displayProductName: "",
     quantity: "1",
     bagWeight: "",
     currentSalePrice: "",
@@ -42,6 +45,7 @@ const emptyValues: SaleFormValues = {
   saleNumber: "",
   saleDate: "",
   customerId: "",
+  brokerId: "",
   warehouseId: "",
   items: [newItem()],
   batchNumber: "",
@@ -73,6 +77,7 @@ function toFormValues(sale?: Sale): SaleFormValues {
       ? sale.items.map((item) => ({
           id: item.id,
           productId: item.productId,
+          displayProductName: item.displayProductName ?? item.productName ?? "",
           quantity: String(item.quantity),
           bagWeight: String(item.bagWeight),
           currentSalePrice: String(item.currentSalePrice),
@@ -81,6 +86,7 @@ function toFormValues(sale?: Sale): SaleFormValues {
           {
             id: `itm-${sale.id}-1`,
             productId: sale.productId,
+            displayProductName: sale.displayProductName ?? sale.productName ?? "",
             quantity: String(sale.quantity),
             bagWeight: String(sale.bagWeight),
             currentSalePrice: String(sale.currentSalePrice),
@@ -90,6 +96,7 @@ function toFormValues(sale?: Sale): SaleFormValues {
     saleNumber: sale.saleNumber,
     saleDate: sale.saleDate,
     customerId: sale.customerId,
+    brokerId: sale.brokerId ?? "",
     warehouseId: sale.warehouseId,
     items,
     batchNumber: sale.batchNumber,
@@ -112,6 +119,7 @@ export default function SaleForm({ sale }: { sale?: Sale }) {
   const router = useRouter();
   const [values, setValues] = useState(() => toFormValues(sale));
   const [customers] = useState<Customer[]>(() => customerService.getAll());
+  const [brokers] = useState<Broker[]>(() => brokerService.getAll());
   const [products] = useState<Product[]>(() => productService.getAll());
   const [warehouses] = useState<Warehouse[]>(() => warehouseService.getAll());
   const [inventory, setInventory] = useState<InventoryItem[]>(() => inventoryService.getAll());
@@ -167,6 +175,9 @@ export default function SaleForm({ sale }: { sale?: Sale }) {
           if (product) {
             next.bagWeight = product.bagWeight.replace(/[^\d.]/g, "");
             next.currentSalePrice = String(product.suggestedSalePrice);
+            next.displayProductName = product.productName;
+          } else {
+            next.displayProductName = "";
           }
         }
         return next;
@@ -392,6 +403,27 @@ export default function SaleForm({ sale }: { sale?: Sale }) {
             />
           </label>
 
+          {/* Broker */}
+          <label className="block">
+            <span className="mb-2 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">
+              Broker
+            </span>
+            <select
+              value={values.brokerId}
+              onChange={(event) => update("brokerId", event.target.value)}
+              className={inputClass}
+            >
+              <option value="">Not assigned</option>
+              {brokers
+                .filter((broker) => broker.status === "active" || broker.id === values.brokerId)
+                .map((broker) => (
+                  <option key={broker.id} value={broker.id}>
+                    {broker.name}
+                  </option>
+                ))}
+            </select>
+          </label>
+
           {/* Dispatch Warehouse */}
           <label className="block">
             <span className="mb-2 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">
@@ -472,9 +504,10 @@ export default function SaleForm({ sale }: { sale?: Sale }) {
         </div>
 
         <div className="overflow-x-auto rounded-xl border border-slate-200/80 dark:border-slate-800">
-          <div className="min-w-[700px]">
-            <div className="grid grid-cols-[minmax(240px,2.5fr)_1fr_1.2fr_1fr_1.2fr_56px] bg-slate-50/80 px-4 py-3 text-xs font-bold uppercase tracking-wider text-slate-500 dark:bg-slate-800/50 dark:text-slate-400">
+          <div className="min-w-[880px]">
+            <div className="grid grid-cols-[minmax(240px,2.4fr)_minmax(180px,1.8fr)_0.8fr_1.1fr_1fr_1.1fr_56px] bg-slate-50/80 px-4 py-3 text-xs font-bold uppercase tracking-wider text-slate-500 dark:bg-slate-800/50 dark:text-slate-400">
               <span>Product</span>
+              <span>Product Name on Invoice</span>
               <span>Stock</span>
               <span>Price</span>
               <span>Quantity</span>
@@ -494,7 +527,7 @@ export default function SaleForm({ sale }: { sale?: Sale }) {
                 return (
                   <div
                     key={item.id}
-                    className="grid grid-cols-[minmax(240px,2.5fr)_1fr_1.2fr_1fr_1.2fr_56px] items-center gap-3 px-4 py-3 transition-colors hover:bg-slate-50/50 dark:hover:bg-slate-800/30"
+                    className="grid grid-cols-[minmax(240px,2.4fr)_minmax(180px,1.8fr)_0.8fr_1.1fr_1fr_1.1fr_56px] items-center gap-3 px-4 py-3 transition-colors hover:bg-slate-50/50 dark:hover:bg-slate-800/30"
                   >
                     <div>
                       <select
@@ -527,6 +560,29 @@ export default function SaleForm({ sale }: { sale?: Sale }) {
                       {errors[`item-${item.id}-product`] && (
                         <span className="mt-1 block text-xs font-medium text-rose-500">
                           {errors[`item-${item.id}-product`]}
+                        </span>
+                      )}
+                    </div>
+
+                    <div>
+                      <input
+                        type="text"
+                        value={item.displayProductName}
+                        onChange={(event) =>
+                          updateItem(
+                            index,
+                            "displayProductName",
+                            event.target.value,
+                          )
+                        }
+                        placeholder="Actual product name by default"
+                        className={`${inputClass} ${item.productId ? "" : "bg-slate-100/70 text-slate-500 cursor-not-allowed dark:bg-slate-800/50"}`}
+                        disabled={!item.productId}
+                      />
+                      {item.productId && (
+                        <span className="mt-1 block truncate text-xs text-slate-400">
+                          Inventory:{" "}
+                          {products.find((product) => product.id === item.productId)?.productName ?? ""}
                         </span>
                       )}
                     </div>

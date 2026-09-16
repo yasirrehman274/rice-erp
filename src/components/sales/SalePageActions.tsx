@@ -8,7 +8,7 @@ import LoadingSpinner from "@/components/ui/LoadingSpinner";
 
 export default function SalePageActions({ sales }: { sales: Sale[] }) {
   const [exporting, setExporting] = useState<"pdf" | "excel" | null>(null);
-  function exportCsv() { const rows = ["Sale No,Date,Customer,Warehouse,Product,Quantity,Total,Received,Remaining,Status", ...sales.map((sale) => [sale.saleNumber, sale.saleDate, sale.customerName, sale.warehouseName, sale.productName, sale.quantity, sale.grandTotal, sale.receivedAmount, sale.remainingBalance, sale.status].map((value) => `"${String(value).replaceAll('"', '""')}"`).join(","))]; const url = URL.createObjectURL(new Blob([rows.join("\n")], { type: "text/csv;charset=utf-8" })); const link = document.createElement("a"); link.href = url; link.download = "rice-erp-sales.csv"; link.click(); URL.revokeObjectURL(url); }
+  function exportCsv() { const rows = ["Sale No,Date,Customer,Broker,Warehouse,Product,Quantity,Total,Received,Remaining,Status", ...sales.map((sale) => [sale.saleNumber, sale.saleDate, sale.customerName, sale.brokerName || "Not assigned", sale.warehouseName, sale.productName, sale.quantity, sale.grandTotal, sale.receivedAmount, sale.remainingBalance, sale.status].map((value) => `"${String(value).replaceAll('"', '""')}"`).join(","))]; const url = URL.createObjectURL(new Blob([rows.join("\n")], { type: "text/csv;charset=utf-8" })); const link = document.createElement("a"); link.href = url; link.download = "rice-erp-sales.csv"; link.click(); URL.revokeObjectURL(url); }
   function handleExport(kind: "pdf" | "excel") {
     if (exporting) return;
     setExporting(kind);

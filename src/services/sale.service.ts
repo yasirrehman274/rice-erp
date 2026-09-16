@@ -3,9 +3,11 @@ import { getItem, setItem, ensureSeeded } from "@/lib/storage";
 import { seedAll } from "@/utils/seed";
 import { apiRequest } from "@/lib/api";
 import { customerService } from "./customer.service";
+import { brokerService } from "./broker.service";
 import { warehouseService } from "./warehouse.service";
 import { productService } from "./product.service";
 import { inventoryService } from "./inventory.service";
+import { round2 } from "@/lib/utils";
 
 const KEY = "sales";
 
@@ -38,10 +40,11 @@ function nextId(existing: Sale[]): string {
   return `sal-${String(n).padStart(3, "0")}`;
 }
 
-function resolveNames(values: SaleFormValues): { customerName: string; warehouseName: string } {
+function resolveNames(values: SaleFormValues): { customerName: string; warehouseName: string; brokerName: string } {
   const customer = customerService.getById(values.customerId);
   const warehouse = warehouseService.getById(values.warehouseId);
-  return { customerName: customer?.name ?? "", warehouseName: warehouse?.name ?? "" };
+  const broker = brokerService.getById(values.brokerId);
+  return { customerName: customer?.name ?? "", warehouseName: warehouse?.name ?? "", brokerName: broker?.name ?? "" };
 }
 
 function toSaleItems(values: SaleFormValues): SaleItem[] {
@@ -50,10 +53,12 @@ function toSaleItems(values: SaleFormValues): SaleItem[] {
     const bagWeight = Number(item.bagWeight) || 0;
     const price = Number(item.currentSalePrice) || 0;
     const product = productService.getById(item.productId);
+    const actualName = product?.productName ?? "";
     return {
       id: item.id,
       productId: item.productId,
-      productName: product?.productName ?? "",
+      productName: actualName,
+      displayProductName: item.displayProductName.trim() || actualName,
       quantity,
       bagWeight,
       totalWeight: quantity * bagWeight,
@@ -62,6 +67,26 @@ function toSaleItems(values: SaleFormValues): SaleItem[] {
       subtotal: quantity * price,
     };
   });
+}
+
+function computeItemProfit(item: SaleItem, warehouseId: string): SaleItem {
+  const costPerKG = item.productId && warehouseId
+    ? Number(inventoryService.getByProductAndWarehouse(item.productId, warehouseId)?.averageCostPerKG) || 0
+    : 0;
+  const bagWeight = Number(item.bagWeight) || 0;
+  const quantity = Number(item.quantity) || 0;
+  const unitCostPerBag = round2(costPerKG * bagWeight);
+  const itemCOGS = round2(quantity * unitCostPerBag);
+  const itemProfit = round2(item.subtotal - itemCOGS);
+  return { ...item, unitCostPerBag, itemCOGS, itemProfit };
+}
+
+function computeProfit(items: SaleItem[], warehouseId: string, grandTotal: number): { costOfGoodsSold: number; grossProfit: number; profitMargin: number } {
+  const enriched = items.map((item) => computeItemProfit(item, warehouseId));
+  const costOfGoodsSold = round2(enriched.reduce((sum, item) => sum + (item.itemCOGS ?? 0), 0));
+  const grossProfit = round2(grandTotal - costOfGoodsSold);
+  const profitMargin = grandTotal > 0 ? round2((grossProfit / grandTotal) * 100) : 0;
+  return { costOfGoodsSold, grossProfit, profitMargin };
 }
 
 function toSale(values: SaleFormValues, id: string): Sale {
@@ -73,16 +98,20 @@ function toSale(values: SaleFormValues, id: string): Sale {
   const receivedAmount = Number(values.receivedAmount) || 0;
   const status = values.status === "cancelled" ? "cancelled" : receivedAmount >= grandTotal && grandTotal > 0 ? "paid" : receivedAmount > 0 ? "partial" : values.status;
   const first = items[0];
+  const profit = computeProfit(items, values.warehouseId, grandTotal);
   return {
     id,
     saleNumber: values.saleNumber,
     saleDate: values.saleDate,
     customerId: values.customerId,
     customerName: names.customerName,
+    brokerId: values.brokerId,
+    brokerName: names.brokerName,
     warehouseId: values.warehouseId,
     warehouseName: names.warehouseName,
     productId: first.productId,
     productName: first.productName,
+    displayProductName: first.displayProductName || first.productName || "",
     batchNumber: values.batchNumber,
     riceVariety: values.riceVariety,
     quantity: first.quantity,
@@ -91,11 +120,14 @@ function toSale(values: SaleFormValues, id: string): Sale {
     currentSalePrice: first.currentSalePrice,
     saleRate: first.saleRate,
     subtotal,
-    items,
+    items: items.map((item) => computeItemProfit(item, values.warehouseId)),
     discount: Number(values.discount) || 0,
     transportCharges: Number(values.transportCharges) || 0,
     otherCharges: Number(values.otherCharges) || 0,
     grandTotal,
+    costOfGoodsSold: profit.costOfGoodsSold,
+    grossProfit: profit.grossProfit,
+    profitMargin: profit.profitMargin,
     receivedAmount,
     remainingBalance: grandTotal - receivedAmount,
     paymentMethod: values.paymentMethod,
@@ -314,7 +346,11 @@ function remove(id: string): void {
 
 function search(query: string): Sale[] {
   const q = query.toLowerCase();
-  return getAll().filter((s) => `${s.saleNumber} ${s.customerName} ${s.productName}`.toLowerCase().includes(q));
+  return getAll().filter((s) =>
+    `${s.saleNumber} ${s.customerName} ${s.brokerName ?? ""} ${s.productName} ${s.displayProductName ?? ""} ${(s.items ?? []).map((item) => `${item.productName} ${item.displayProductName ?? ""}`).join(" ")}`
+      .toLowerCase()
+      .includes(q),
+  );
 }
 
 function filter(predicate: (s: Sale) => boolean): Sale[] {
@@ -349,6 +385,7 @@ function getSaleHistory(): SaleHistoryEntry[] {
     saleNumber: sale.saleNumber,
     date: sale.saleDate,
     customerName: sale.customerName,
+    brokerName: sale.brokerName,
     productName: sale.productName,
     quantity: sale.quantity,
     amount: sale.grandTotal,

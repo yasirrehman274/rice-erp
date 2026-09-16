@@ -88,6 +88,7 @@ export function saleItems(sale: Sale): SaleItem[] {
       id: `${sale.id}-item`,
       productId: sale.productId,
       productName: sale.productName,
+      displayProductName: sale.displayProductName || sale.productName || "",
       quantity: Number(sale.quantity) || 0,
       bagWeight: Number(sale.bagWeight) || 0,
       totalWeight: Number(sale.totalWeight) || 0,
@@ -100,6 +101,16 @@ export function saleItems(sale: Sale): SaleItem[] {
 
 export function isActiveSale(sale: Sale): boolean {
   return sale.status !== "cancelled";
+}
+
+/** True when a sale has cost-of-goods recorded on it (i.e. created after the profit feature). */
+export function profitIsRecorded(sale: Sale): boolean {
+  return typeof sale.costOfGoodsSold === "number" && sale.costOfGoodsSold > 0;
+}
+
+/** Returns the recorded gross profit for a sale, or 0 when cost was never recorded. */
+export function saleGrossProfit(sale: Sale): number {
+  return profitIsRecorded(sale) && typeof sale.grossProfit === "number" ? sale.grossProfit : 0;
 }
 
 export function purchaseItems(purchase: Purchase): PurchaseItem[] {
@@ -168,11 +179,14 @@ export function calcCOGS(sales: Sale[], inventory: InventoryItem[]): COGSResult 
   for (const sale of sales) {
     if (!isActiveSale(sale)) continue;
     for (const item of saleItems(sale)) {
-      const costPerKG = costs.get(item.productId)?.costPerKG ?? 0;
       const bags = Number(item.quantity) || 0;
       const bagWeight = Number(item.bagWeight) || 0;
       if (bags <= 0) continue;
-      const costPerBag = round2(costPerKG * bagWeight);
+      const costPerKG = costs.get(item.productId)?.costPerKG ?? 0;
+      const fallbackCostPerBag = round2(costPerKG * bagWeight);
+      const costPerBag = typeof item.unitCostPerBag === "number" && item.unitCostPerBag > 0 ? item.unitCostPerBag : fallbackCostPerBag;
+      const storedTotal = typeof item.itemCOGS === "number" && item.itemCOGS > 0 ? item.itemCOGS : 0;
+      const total = storedTotal > 0 ? storedTotal : round2(bags * costPerBag);
       const row = rows.get(item.productId) ?? {
         productId: item.productId,
         productName: item.productName,
@@ -182,12 +196,12 @@ export function calcCOGS(sales: Sale[], inventory: InventoryItem[]): COGSResult 
         total: 0,
       };
       row.bags += bags;
-      row.total = round2(row.total + bags * costPerBag);
+      row.total = round2(row.total + total);
       rows.set(item.productId, row);
     }
   }
   const items = Array.from(rows.values())
-    .map((row) => ({ ...row, costPerBag: round2(row.total / row.bags) }))
+    .map((row) => ({ ...row, costPerBag: row.bags > 0 ? round2(row.total / row.bags) : 0 }))
     .sort((a, b) => b.total - a.total);
   return { total: round2(items.reduce((sum, row) => sum + row.total, 0)), items };
 }

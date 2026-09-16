@@ -8,7 +8,7 @@ import LoadingSpinner from "@/components/ui/LoadingSpinner";
 
 export default function PurchasePageActions({ purchases }: { purchases: Purchase[] }) {
   const [exporting, setExporting] = useState<"pdf" | "excel" | null>(null);
-  function exportCsv() { const rows = ["Purchase No,Date,Supplier,Warehouse,Product,Quantity,Total,Paid,Remaining,Status", ...purchases.map((purchase) => [purchase.purchaseNumber, purchase.purchaseDate, purchase.supplierName, purchase.warehouseName, purchase.productName, purchase.quantity, purchase.grandTotal, purchase.paidAmount, purchase.remainingBalance, purchase.status].map((value) => `"${String(value).replaceAll('"', '""')}"`).join(","))]; const url = URL.createObjectURL(new Blob([rows.join("\n")], { type: "text/csv;charset=utf-8" })); const link = document.createElement("a"); link.href = url; link.download = "rice-erp-purchases.csv"; link.click(); URL.revokeObjectURL(url); }
+  function exportCsv() { const rows = ["Purchase No,Date,Supplier,Broker,Warehouse,Product,Quantity,Total,Paid,Remaining,Status", ...purchases.map((purchase) => [purchase.purchaseNumber, purchase.purchaseDate, purchase.supplierName, purchase.brokerName || "Not assigned", purchase.warehouseName, purchase.productName, purchase.quantity, purchase.grandTotal, purchase.paidAmount, purchase.remainingBalance, purchase.status].map((value) => `"${String(value).replaceAll('"', '""')}"`).join(","))]; const url = URL.createObjectURL(new Blob([rows.join("\n")], { type: "text/csv;charset=utf-8" })); const link = document.createElement("a"); link.href = url; link.download = "rice-erp-purchases.csv"; link.click(); URL.revokeObjectURL(url); }
   function handleExport(kind: "pdf" | "excel") {
     if (exporting) return;
     setExporting(kind);

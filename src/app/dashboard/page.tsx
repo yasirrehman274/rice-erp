@@ -1,16 +1,18 @@
 "use client";
 
-import { ChevronRight, Download, Factory } from "lucide-react";
+import { ChevronRight, Download, Factory, Handshake } from "lucide-react";
 import Link from "next/link";
 import DashboardCards from "@/components/dashboard/DashboardCards";
 import RevenueChart from "@/components/dashboard/RevenueChart";
 import { warehouseService } from "@/services/warehouse.service";
 import { expenseService } from "@/services/expense.service";
 import { productionService } from "@/services/production.service";
+import { brokerService } from "@/services/broker.service";
 import { useState, useEffect } from "react";
 import type { Warehouse } from "@/types/warehouse";
 import type { Expense } from "@/types/expense";
 import type { Production } from "@/types/production";
+import type { Broker } from "@/types/broker";
 import { formatCurrency } from "@/lib/utils";
 
 const warehouseColors = ["bg-emerald-500", "bg-blue-500", "bg-amber-500", "bg-violet-500", "bg-rose-500", "bg-cyan-500"];
@@ -19,12 +21,14 @@ export default function DashboardPage() {
   const [warehouses, setWarehouses] = useState<Warehouse[]>([]);
   const [expenses, setExpenses] = useState<Expense[]>([]);
   const [productions, setProductions] = useState<Production[]>([]);
+  const [brokers, setBrokers] = useState<Broker[]>([]);
 
   useEffect(() => {
     let mounted = true;
     warehouseService.refresh().then((data) => { if (mounted) setWarehouses(data); }).catch(() => { if (mounted) setWarehouses(warehouseService.getAll()); });
     expenseService.refresh().then((data) => { if (mounted) setExpenses(data); }).catch(() => { if (mounted) setExpenses(expenseService.getAll()); });
     productionService.refresh().then((data) => { if (mounted) setProductions(data); }).catch(() => { if (mounted) setProductions(productionService.getAll()); });
+    brokerService.refresh().then((data) => { if (mounted) setBrokers(data); }).catch(() => { if (mounted) setBrokers(brokerService.getAll()); });
     return () => { mounted = false; };
   }, []);
 
@@ -46,6 +50,20 @@ export default function DashboardPage() {
       </div>
     </div>
     <DashboardCards />
+    <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900 sm:p-6">
+      <div className="flex items-center justify-between">
+        <div>
+          <h2 className="flex items-center gap-2 font-semibold"><Handshake size={18} className="text-emerald-600" />Brokers</h2>
+          <p className="mt-1 text-sm text-slate-500">Deal-making partners across purchases and sales.</p>
+        </div>
+        <Link href="/brokers" className="inline-flex items-center gap-1 text-sm font-semibold text-emerald-600 hover:text-emerald-500">View all<ChevronRight size={15} /></Link>
+      </div>
+      <div className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        <ProductionStat label="Total brokers" value={String(brokers.length)} />
+        <ProductionStat label="Active brokers" value={String(brokers.filter((b) => b.status === "active").length)} />
+        <ProductionStat label="Inactive brokers" value={String(brokers.filter((b) => b.status === "inactive").length)} />
+      </div>
+    </section>
     <div className="grid gap-6 xl:grid-cols-[minmax(0,1.65fr)_minmax(280px,.8fr)]">
       <RevenueChart />
       <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900 sm:p-6">

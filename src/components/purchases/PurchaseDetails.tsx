@@ -33,6 +33,7 @@ export default function PurchaseDetails({ purchase, payments }: { purchase: Purc
           <h3 className="text-sm font-semibold">Purchase details</h3>
           <div className="mt-4 grid gap-4 sm:grid-cols-2">
             <DetailRow label="Warehouse" value={purchase.warehouseName} />
+            <DetailRow label="Broker" value={purchase.brokerName || "Not assigned"} />
             <DetailRow label="Rice variety" value={purchase.riceVariety || "N/A"} />
             <DetailRow label="Quantity" value={`${purchaseService.purchaseTotalBags(purchase)} bags`} />
             <DetailRow label="Bag weight" value={`${purchase.bagWeight} KG`} />

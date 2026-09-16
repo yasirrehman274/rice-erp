@@ -6,12 +6,16 @@ export interface SaleItem {
   id: string;
   productId: string;
   productName: string;
+  displayProductName?: string;
   quantity: number;
   bagWeight: number;
   totalWeight: number;
   currentSalePrice: number;
   saleRate: number;
   subtotal: number;
+  unitCostPerBag?: number;
+  itemCOGS?: number;
+  itemProfit?: number;
 }
 
 export interface Sale {
@@ -20,10 +24,13 @@ export interface Sale {
   saleDate: string;
   customerId: string;
   customerName: string;
+  brokerId?: string;
+  brokerName?: string;
   warehouseId: string;
   warehouseName: string;
   productId: string;
   productName: string;
+  displayProductName?: string;
   batchNumber: string;
   riceVariety: string;
   quantity: number;
@@ -36,6 +43,9 @@ export interface Sale {
   transportCharges: number;
   otherCharges: number;
   grandTotal: number;
+  costOfGoodsSold?: number;
+  grossProfit?: number;
+  profitMargin?: number;
   receivedAmount: number;
   remainingBalance: number;
   paymentMethod: SalePaymentMethod;
@@ -53,6 +63,7 @@ export interface Sale {
 export interface SaleItemForm {
   id: string;
   productId: string;
+  displayProductName: string;
   quantity: string;
   bagWeight: string;
   currentSalePrice: string;
@@ -62,6 +73,7 @@ export interface SaleFormValues {
   saleNumber: string;
   saleDate: string;
   customerId: string;
+  brokerId: string;
   warehouseId: string;
   items: SaleItemForm[];
   batchNumber: string;
@@ -91,7 +103,9 @@ export interface SaleHistoryEntry {
   saleNumber: string;
   date: string;
   customerName: string;
+  brokerName?: string;
   productName: string;
+  displayProductName?: string;
   quantity: number;
   amount: number;
   status: SaleStatus;

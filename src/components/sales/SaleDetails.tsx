@@ -1,12 +1,14 @@
 "use client";
 
-import { AlertTriangle, Calendar, CheckCircle, Clock, Package, Truck, WalletCards } from "lucide-react";
+import { AlertTriangle, Calendar, CheckCircle, Clock, Package, Truck, WalletCards, TrendingUp, TrendingDown } from "lucide-react";
 import Link from "next/link";
 import { formatCurrency, formatDate } from "@/lib/utils";
+import { profitIsRecorded } from "@/lib/reporting";
 import type { Sale, SalePayment } from "@/types/sale";
 import { SaleStatusBadge, SalePaymentBadge } from "./SaleStatusBadge";
 
 export default function SaleDetails({ sale, payments }: { sale: Sale; payments: SalePayment[] }) {
+  const profitKnown = profitIsRecorded(sale);
   return <div className="space-y-6">
     <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_360px]">
       <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900 sm:p-6">
@@ -20,7 +22,7 @@ export default function SaleDetails({ sale, payments }: { sale: Sale; payments: 
             </div>
             <p className="mt-1 text-sm text-slate-500">Created on {formatDate(sale.createdAt)}</p>
             <div className="mt-5 grid gap-3 text-sm text-slate-600 sm:grid-cols-2 dark:text-slate-400">
-              <p className="flex items-center gap-2"><Package size={16} />{sale.productName}{sale.items && sale.items.length > 1 ? ` (+${sale.items.length - 1} more)` : ""}</p>
+              <p className="flex items-center gap-2"><Package size={16} />{sale.displayProductName || sale.productName}{sale.items && sale.items.length > 1 ? ` (+${sale.items.length - 1} more)` : ""}</p>
               <p className="flex items-center gap-2"><Truck size={16} />{sale.customerName}</p>
               <p className="flex items-center gap-2"><Calendar size={16} />{formatDate(sale.saleDate)}</p>
               <p className="flex items-center gap-2"><WalletCards size={16} />{sale.batchNumber || "N/A"}</p>
@@ -40,16 +42,27 @@ export default function SaleDetails({ sale, payments }: { sale: Sale; payments: 
                       <th className="px-4 py-2.5 text-right">Qty</th>
                       <th className="px-4 py-2.5 text-right">Bag KG</th>
                       <th className="px-4 py-2.5 text-right">Rate</th>
+                      <th className="px-4 py-2.5 text-right">Cost/bag</th>
+                      <th className="px-4 py-2.5 text-right">Profit</th>
                       <th className="px-4 py-2.5 text-right">Subtotal</th>
                     </tr>
                   </thead>
                   <tbody>
                     {sale.items.map((item) => (
                       <tr key={item.id} className="border-t border-slate-100 dark:border-slate-800">
-                        <td className="px-4 py-3 font-medium">{item.productName}</td>
+                        <td className="px-4 py-3">
+                          <p className="font-medium">{item.displayProductName || item.productName}</p>
+                          {item.displayProductName && item.displayProductName !== item.productName && (
+                            <p className="text-xs text-slate-400">Inventory: {item.productName}</p>
+                          )}
+                        </td>
                         <td className="px-4 py-3 text-right">{item.quantity}</td>
                         <td className="px-4 py-3 text-right">{item.bagWeight}</td>
                         <td className="px-4 py-3 text-right">{formatCurrency(item.currentSalePrice)}</td>
+                        <td className="px-4 py-3 text-right text-slate-500">{profitKnown ? formatCurrency(item.unitCostPerBag ?? 0) : "—"}</td>
+                        <td className={`px-4 py-3 text-right font-medium ${profitKnown ? (item.itemProfit && item.itemProfit < 0 ? "text-rose-600" : "text-emerald-600") : "text-slate-400"}`}>
+                          {profitKnown ? formatCurrency(item.itemProfit ?? 0) : "—"}
+                        </td>
                         <td className="px-4 py-3 text-right font-semibold">{formatCurrency(item.subtotal)}</td>
                       </tr>
                     ))}
@@ -61,7 +74,10 @@ export default function SaleDetails({ sale, payments }: { sale: Sale; payments: 
             <>
               <h3 className="text-sm font-semibold">Sale details</h3>
               <div className="mt-4 grid gap-4 sm:grid-cols-2">
+                <DetailRow label="Product (customer-facing)" value={sale.displayProductName || sale.productName} />
+                <DetailRow label="Product (inventory)" value={sale.productName} />
                 <DetailRow label="Warehouse" value={sale.warehouseName} />
+                <DetailRow label="Broker" value={sale.brokerName || "Not assigned"} />
                 <DetailRow label="Rice variety" value={sale.riceVariety || "N/A"} />
                 <DetailRow label="Quantity" value={`${sale.quantity} bags`} />
                 <DetailRow label="Bag weight" value={`${sale.bagWeight} KG`} />
@@ -85,6 +101,30 @@ export default function SaleDetails({ sale, payments }: { sale: Sale; payments: 
           </div>
         </div>
 
+        <div className="mt-6 border-t border-slate-100 pt-5 dark:border-slate-800">
+          <div className="flex items-center gap-2">
+            <h3 className="text-sm font-semibold">Gross profit</h3>
+            {profitKnown && (sale.grossProfit ?? 0) >= 0 ? <TrendingUp size={15} className="text-emerald-600" /> : <TrendingDown size={15} className="text-rose-500" />}
+          </div>
+          {!profitKnown ? (
+            <div className="mt-4 rounded-xl border border-dashed border-slate-300 bg-slate-50 p-4 text-sm text-slate-500 dark:border-slate-700 dark:bg-slate-800/40">
+              Profit is not available for this sale. It will be calculated when the sale is created or edited with inventory cost data.
+            </div>
+          ) : (
+            <div className="mt-4 space-y-3">
+              <CostRow label="Sale revenue (net)" value={formatCurrency(sale.grandTotal)} />
+              <CostRow label="Cost of goods sold" value={`-${formatCurrency(sale.costOfGoodsSold ?? 0)}`} className="text-rose-600" />
+              <div className="border-t border-slate-200 pt-3 dark:border-slate-700">
+                <div className={`flex items-center justify-between rounded-xl px-4 py-3 ${(sale.grossProfit ?? 0) < 0 ? "bg-rose-50 dark:bg-rose-500/10" : "bg-emerald-50 dark:bg-emerald-500/10"}`}>
+                  <span className="text-sm font-bold">Gross profit</span>
+                  <span className={`text-lg font-bold ${(sale.grossProfit ?? 0) < 0 ? "text-rose-600" : "text-emerald-600"}`}>{formatCurrency(sale.grossProfit ?? 0)}</span>
+                </div>
+              </div>
+              <p className="text-xs text-slate-400">Profit margin: <span className={`font-semibold ${(sale.profitMargin ?? 0) < 0 ? "text-rose-500" : "text-emerald-600"}`}>{sale.profitMargin ?? 0}%</span></p>
+            </div>
+          )}
+        </div>
+
         {sale.notes && <div className="mt-6 border-t border-slate-100 pt-5 dark:border-slate-800"><h3 className="text-sm font-semibold">Notes</h3><p className="mt-2 text-sm leading-6 text-slate-500">{sale.notes}</p></div>}
       </section>
 
@@ -96,6 +136,7 @@ export default function SaleDetails({ sale, payments }: { sale: Sale; payments: 
           <div className="mt-5 space-y-3">
             <MiniStat label="Amount received" value={formatCurrency(sale.receivedAmount)} />
             <MiniStat label="Remaining balance" value={formatCurrency(sale.remainingBalance)} />
+            {profitKnown && <MiniStat label="Gross profit" value={formatCurrency(sale.grossProfit ?? 0)} />}
           </div>
           {sale.remainingBalance > 0 && sale.status !== "cancelled" && <Link href={`/sales/payments/${sale.id}`} className="mt-4 block rounded-xl bg-white/15 py-2.5 text-center text-sm font-semibold text-white hover:bg-white/25">Record payment</Link>}
         </div>
